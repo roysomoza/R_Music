@@ -1,0 +1,230 @@
+<!DOCTYPE html>
+
+<html class="light" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Pure Audio - Home</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@300;400;600&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    colors: {
+                        "tertiary": "#198038",
+                        "on-background": "#161616",
+                        "outline-variant": "#e0e0e0",
+                        "primary-container": "#d0e2ff",
+                        "on-secondary-fixed": "#161616",
+                        "on-tertiary-fixed-variant": "#044317",
+                        "inverse-primary": "#78a9ff",
+                        "primary-fixed": "#d0e2ff",
+                        "surface-container": "#f4f4f4",
+                        "surface-tint": "#0f62fe",
+                        "surface-container-lowest": "#ffffff",
+                        "error-container": "#fff1f1",
+                        "tertiary-fixed": "#a7f0ba",
+                        "surface-dim": "#e0e0e0",
+                        "on-surface-variant": "#525252",
+                        "on-tertiary-fixed": "#022d0d",
+                        "secondary": "#6f6f6f",
+                        "secondary-fixed-dim": "#c6c6c6",
+                        "secondary-fixed": "#e0e0e0",
+                        "surface-container-highest": "#c6c6c6",
+                        "surface-variant": "#e0e0e0",
+                        "tertiary-fixed-dim": "#42be65",
+                        "on-primary-fixed-variant": "#0043ce",
+                        "surface": "#ffffff",
+                        "on-secondary-container": "#525252",
+                        "surface-container-high": "#e0e0e0",
+                        "primary": "#0f62fe",
+                        "background": "#f4f4f4",
+                        "secondary-container": "#e0e0e0",
+                        "inverse-on-surface": "#f4f4f4",
+                        "tertiary-container": "#a7f0ba",
+                        "outline": "#8d8d8d",
+                        "on-secondary": "#ffffff",
+                        "error": "#da1e28",
+                        "surface-bright": "#ffffff",
+                        "on-surface": "#161616",
+                        "primary-fixed-dim": "#78a9ff",
+                        "on-tertiary-container": "#044317",
+                        "on-primary": "#ffffff",
+                        "on-primary-container": "#161616",
+                        "on-secondary-fixed-variant": "#525252",
+                        "on-primary-fixed": "#001d6c",
+                        "on-error-container": "#750e13",
+                        "on-error": "#ffffff",
+                        "on-tertiary": "#ffffff",
+                        "surface-container-low": "#f4f4f4",
+                        "inverse-surface": "#393939"
+                    },
+                    borderRadius: {
+                        "DEFAULT": "0px",
+                        "lg": "0px",
+                        "xl": "0px",
+                        "full": "0px"
+                    },
+                    spacing: {
+                        '2': '0.5rem',
+                        '4': '1rem',
+                        '8': '2rem',
+                        '16': '4rem',
+                    },
+                    fontFamily: {
+                        "headline": ["IBM Plex Sans", "sans-serif"],
+                        "display": ["IBM Plex Sans", "sans-serif"],
+                        "body": ["IBM Plex Sans", "sans-serif"],
+                        "label": ["IBM Plex Sans", "sans-serif"]
+                    }
+                },
+            },
+        }
+    </script>
+<style>
+        body {
+            font-family: 'IBM Plex Sans', sans-serif;
+            background-color: #f4f4f4;
+            color: #161616;
+            -webkit-font-smoothing: antialiased;
+        }
+        .pb-safe { padding-bottom: env(safe-area-inset-bottom, 20px); }
+    </style>
+<style>
+    body {
+      min-height: max(884px, 100dvh);
+    }
+  </style>
+</head>
+<body class="bg-background min-h-screen flex flex-col antialiased relative pb-24 md:pb-0">
+<!-- TopAppBar -->
+<header class="docked full-width top-0 bg-surface text-primary font-body text-headline-sm font-semibold border-b border-outline-variant transition-colors duration-150 ease-in-out flex justify-between items-center w-full px-4 h-12 z-40 hidden md:flex">
+<div class="flex items-center gap-2">
+<span class="material-symbols-outlined text-primary">equalizer</span>
+<span class="text-lg font-semibold tracking-tight text-on-surface">Pure Audio</span>
+</div>
+<button class="hover:bg-surface-container rounded-full p-2 transition-colors flex items-center justify-center">
+<span class="material-symbols-outlined text-primary">search</span>
+</button>
+</header>
+<!-- Main Content Canvas -->
+<main class="flex-grow w-full max-w-4xl mx-auto px-4 md:px-8 py-8 md:py-12 flex flex-col gap-12">
+<!-- Now Playing Hero Section -->
+<section class="flex flex-col md:flex-row gap-8 items-center md:items-start w-full">
+<!-- Album Art -->
+<div class="w-full md:w-1/2 aspect-square max-w-[400px] bg-surface border border-outline-variant flex-shrink-0 shadow-sm relative overflow-hidden group">
+<img alt="Now Playing Album Art" class="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105" data-alt="A striking minimalist album cover art piece featuring abstract geometric shapes in shades of deep blue (#0f62fe) and crisp white. High-key soft studio lighting creates a modern, pristine look. The aesthetic is clean, enterprise-grade, and avoids any clutter, reflecting a pure audio experience." src="https://lh3.googleusercontent.com/aida-public/AB6AXuCeFMgnESHZMLAY6STkwPeD5CamjT739wpFRNAEfvWBwyF3UnPr1AXgsVpGuJmmI3nla8o7__DZKO4tst84ywiC3g-j_-rgWGmJ1b8DIwaorF0RYFemuXmUlRc1oO9AWnQ0DJtWBfL-5GsLR2Euej8fae9F4DqD36galDRdiC4G1nim0cEjeVrcTJ7T85uhTxumjXcKoMQ2Z5Drg5jv97DSQeUTvYliqWNiSqE1P6LqCvevLMhmAOxlGq6JZbAerhD7Hu68EifCCTk"/>
+</div>
+<!-- Track Info & Controls -->
+<div class="w-full md:w-1/2 flex flex-col justify-center space-y-6 pt-4 md:pt-12">
+<div>
+<h2 class="text-xs uppercase tracking-wider font-semibold text-secondary mb-2">Now Playing</h2>
+<h1 class="text-3xl md:text-4xl font-semibold text-on-surface leading-tight mb-1">Midnight Resonance</h1>
+<p class="text-lg text-on-surface-variant">The Synthetics</p>
+</div>
+<!-- Transport Controls -->
+<div class="flex items-center space-x-6">
+<button aria-label="Previous Track" class="p-2 text-on-surface-variant hover:text-primary transition-colors focus:outline-none">
+<span class="material-symbols-outlined" style="font-size: 32px; font-variation-settings: 'FILL' 1;">skip_previous</span>
+</button>
+<button aria-label="Play/Pause" class="w-16 h-16 bg-primary text-on-primary flex items-center justify-center hover:bg-primary-fixed-dim transition-colors focus:outline-none">
+<span class="material-symbols-outlined" style="font-size: 40px; font-variation-settings: 'FILL' 1;">play_arrow</span>
+</button>
+<button aria-label="Next Track" class="p-2 text-on-surface-variant hover:text-primary transition-colors focus:outline-none">
+<span class="material-symbols-outlined" style="font-size: 32px; font-variation-settings: 'FILL' 1;">skip_next</span>
+</button>
+<button aria-label="Like" class="p-2 text-on-surface-variant hover:text-error transition-colors focus:outline-none ml-auto">
+<span class="material-symbols-outlined" style="font-size: 28px;">favorite</span>
+</button>
+</div>
+<!-- Progress Bar Placeholder -->
+<div class="w-full flex items-center space-x-3 pt-4">
+<span class="text-xs text-secondary w-8 text-right font-mono">1:24</span>
+<div class="flex-grow h-1 bg-outline-variant relative cursor-pointer">
+<div class="absolute top-0 left-0 h-full bg-primary w-1/3"></div>
+</div>
+<span class="text-xs text-secondary w-8 font-mono">4:05</span>
+</div>
+</div>
+</section>
+<div class="w-full h-px bg-outline-variant my-2"></div>
+<!-- Recently Played Local Files -->
+<section class="w-full bg-surface p-4 border border-outline-variant">
+<h3 class="text-xl font-semibold text-on-surface mb-6">Recently Played</h3>
+<div class="flex flex-col">
+<!-- Track Item -->
+<div class="group flex items-center justify-between p-4 hover:bg-surface-container border-b border-outline-variant transition-colors cursor-pointer">
+<div class="flex items-center gap-4">
+<div class="w-12 h-12 bg-surface-variant flex items-center justify-center border border-outline-variant overflow-hidden flex-shrink-0">
+<img alt="Track thumbnail" class="w-full h-full object-cover" data-alt="A clean, minimalist thumbnail image representing an audio track. Subtle gradient background transitioning from pure white to light gray (#f4f4f4), featuring a single, sharply defined blue soundwave graphic in the center. High contrast, professional corporate style." src="https://lh3.googleusercontent.com/aida-public/AB6AXuA9LjYfyc8PLgJPBOToVy70G7vWafuFEG3fjmsZkL1y4jL0z7UFSkBtrKiw1CkNG1W7bUoP2kPSEj43dHkep6whOcLuKxmq4j4o3NXomfFpj_qCIgKExJkVSaOD6sVPSWlHDhFQiucq5NSImMgRCj-subllL3Eze9f2erIpLY9d667YiP5KSbmKJae4DFcc_32oQPTyEojvkMl2OXu6Jys7YKB53GvWY7eaU7GQgsc3g4maRliYS0cbQxL6ABMxRMVXz8bmJ7LOUjw"/>
+</div>
+<div class="flex flex-col">
+<span class="font-semibold text-on-surface text-sm md:text-base">01 - Introduction.flac</span>
+<span class="text-xs text-secondary">Local Files / Desktop / Audio</span>
+</div>
+</div>
+<div class="flex items-center opacity-0 group-hover:opacity-100 transition-opacity">
+<button class="p-2 text-secondary hover:text-primary transition-colors">
+<span class="material-symbols-outlined">play_circle</span>
+</button>
+</div>
+</div>
+<!-- Track Item -->
+<div class="group flex items-center justify-between p-4 hover:bg-surface-container border-b border-outline-variant transition-colors cursor-pointer">
+<div class="flex items-center gap-4">
+<div class="w-12 h-12 bg-surface-variant flex items-center justify-center border border-outline-variant overflow-hidden flex-shrink-0">
+<img alt="Track thumbnail" class="w-full h-full object-cover" data-alt="A clean, minimalist thumbnail image representing an audio track. Subtle gradient background transitioning from pure white to light gray (#f4f4f4), featuring a single, sharply defined blue soundwave graphic in the center. High contrast, professional corporate style." src="https://lh3.googleusercontent.com/aida-public/AB6AXuApBTZnXIK0cd8LrIKGAdhp9ubXOCnt9T3ECsJrJZAAC0tuaYRWltusmMBqauRdzJCUY0J_RNjUiHa9Q2vcA_T9vlGvk1nsXqfSqsIsAl5CboeYqu5halqFohD7Esl33whzBkLf66IQi8LnNUImUCqigA04aR5nmAeRzMjaBP_nMdA02b5WOTgZLMpAAKW7y8m4eQ3MSE2NRn8-RQCzKZFe8LZhpdOyYEnVvS9rcDXoRrVKy_RyDcqKUmJU2gtTALUpOm786_VJtRE"/>
+</div>
+<div class="flex flex-col">
+<span class="font-semibold text-on-surface text-sm md:text-base">02 - The Arrival.wav</span>
+<span class="text-xs text-secondary">Local Files / Downloads</span>
+</div>
+</div>
+<div class="flex items-center opacity-0 group-hover:opacity-100 transition-opacity">
+<button class="p-2 text-secondary hover:text-primary transition-colors">
+<span class="material-symbols-outlined">play_circle</span>
+</button>
+</div>
+</div>
+<!-- Track Item -->
+<div class="group flex items-center justify-between p-4 hover:bg-surface-container border-b border-outline-variant transition-colors cursor-pointer border-b-0">
+<div class="flex items-center gap-4">
+<div class="w-12 h-12 bg-surface-variant flex items-center justify-center border border-outline-variant overflow-hidden flex-shrink-0">
+<img alt="Track thumbnail" class="w-full h-full object-cover" data-alt="A clean, minimalist thumbnail image representing an audio track. Subtle gradient background transitioning from pure white to light gray (#f4f4f4), featuring a single, sharply defined blue soundwave graphic in the center. High contrast, professional corporate style." src="https://lh3.googleusercontent.com/aida-public/AB6AXuBiXX-u8HUwG3UyBybm11yKkXvDFAuI5wp4eMyzPHaVn13CPoId-d3HcKroFhOEbYJnfnOx7xVQy5aZjPLF3H9j6AcMS15gM9VNm31SvnyMlbvyIWjktzhp2IAJlXhmByXDWvv_0WndtUUQ05Enm_oNszXSxC-TO1FVUJIsUqWvDi1r3uL8zhiTLdpVyvW__4qD1iQux4FC5H7Bwjeq60k0Jrq8nJwCv2MiIqY96zQ65KZK71YVd2F6I1K-uH_cVIVtUf_sRFGo7KE"/>
+</div>
+<div class="flex flex-col">
+<span class="font-semibold text-on-surface text-sm md:text-base">03 - Ambient Loop_v2.mp3</span>
+<span class="text-xs text-secondary">Local Files / Projects / Stems</span>
+</div>
+</div>
+<div class="flex items-center opacity-0 group-hover:opacity-100 transition-opacity">
+<button class="p-2 text-secondary hover:text-primary transition-colors">
+<span class="material-symbols-outlined">play_circle</span>
+</button>
+</div>
+</div>
+</div>
+</section>
+</main>
+<!-- BottomNavBar (Mobile Only) -->
+<nav class="fixed bottom-0 w-full flex justify-around items-center bg-surface pb-safe border-t border-outline-variant md:hidden z-50 h-16">
+<!-- Home (Active) -->
+<a class="flex flex-col items-center justify-center text-primary font-semibold border-t-2 border-primary pt-2 flex-1 h-full active:opacity-80 transition-all" href="#">
+<span class="material-symbols-outlined mb-1" style="font-variation-settings: 'FILL' 1;">home</span>
+<span class="font-label text-xs font-medium">Home</span>
+</a>
+<!-- Library (Inactive) -->
+<a class="flex flex-col items-center justify-center text-secondary pt-2 flex-1 h-full hover:text-on-surface active:opacity-80 transition-all border-t-2 border-transparent" href="#">
+<span class="material-symbols-outlined mb-1">folder_open</span>
+<span class="font-label text-xs font-medium">Library</span>
+</a>
+<!-- Favorites (Inactive) -->
+<a class="flex flex-col items-center justify-center text-secondary pt-2 flex-1 h-full hover:text-on-surface active:opacity-80 transition-all border-t-2 border-transparent" href="#">
+<span class="material-symbols-outlined mb-1">favorite</span>
+<span class="font-label text-xs font-medium">Favorites</span>
+</a>
+</nav>
+</body></html>

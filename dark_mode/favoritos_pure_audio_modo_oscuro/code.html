@@ -1,0 +1,326 @@
+<!DOCTYPE html>
+
+<html class="dark" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Pure Audio - Favorites</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@300;400;500;600;700&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+  tailwind.config = {
+    darkMode: "class",
+    theme: {
+      extend: {
+        "colors": {
+                "surface-bright": "#393939",
+                "inverse-surface": "#e5e2e1",
+                "secondary-fixed": "#e4e2e1",
+                "on-error": "#690005",
+                "secondary-fixed-dim": "#c8c6c6",
+                "surface-tint": "#b4c5ff",
+                "surface-container-highest": "#353534",
+                "inverse-on-surface": "#313030",
+                "on-surface": "#e5e2e1",
+                "on-surface-variant": "#c3c6d8",
+                "tertiary-container": "#c84000",
+                "outline-variant": "#424656",
+                "surface-container": "#201f1f",
+                "surface-dim": "#131313",
+                "on-primary-container": "#f3f3ff",
+                "on-background": "#e5e2e1",
+                "on-secondary": "#303030",
+                "surface": "#131313",
+                "primary-container": "#0f62fe",
+                "tertiary-fixed": "#ffdbd0",
+                "on-tertiary-fixed-variant": "#832700",
+                "on-primary-fixed-variant": "#003da9",
+                "secondary": "#c8c6c6",
+                "on-secondary-fixed-variant": "#474747",
+                "outline": "#8c90a2",
+                "on-secondary-fixed": "#1b1c1c",
+                "on-tertiary": "#5d1900",
+                "error-container": "#93000a",
+                "tertiary-fixed-dim": "#ffb59d",
+                "secondary-container": "#474747",
+                "surface-container-high": "#2a2a2a",
+                "primary-fixed": "#dbe1ff",
+                "surface-container-lowest": "#0e0e0e",
+                "surface-container-low": "#1c1b1b",
+                "on-primary-fixed": "#00174c",
+                "primary": "#b4c5ff",
+                "primary-fixed-dim": "#b4c5ff",
+                "inverse-primary": "#0052dd",
+                "on-tertiary-container": "#fff1ed",
+                "on-primary": "#002979",
+                "tertiary": "#ffb59d",
+                "error": "#ffb4ab",
+                "on-error-container": "#ffdad6",
+                "surface-variant": "#353534",
+                "on-secondary-container": "#b6b5b4",
+                "on-tertiary-fixed": "#390c00",
+                "background": "#131313"
+        },
+        "borderRadius": {
+                "DEFAULT": "0.25rem",
+                "lg": "0.5rem",
+                "xl": "0.75rem",
+                "full": "9999px"
+        },
+        "spacing": {
+                "gutter": "16px",
+                "xs": "4px",
+                "sm": "8px",
+                "lg": "24px",
+                "margin-mobile": "16px",
+                "container-max": "1440px",
+                "xl": "48px",
+                "md": "16px",
+                "base-unit": "4px",
+                "margin-desktop": "32px"
+        },
+        "fontFamily": {
+                "headline-lg": [
+                        "IBM Plex Sans"
+                ],
+                "headline-lg-mobile": [
+                        "IBM Plex Sans"
+                ],
+                "body-md": [
+                        "IBM Plex Sans"
+                ],
+                "label-sm": [
+                        "IBM Plex Sans"
+                ],
+                "headline-sm": [
+                        "IBM Plex Sans"
+                ],
+                "headline-md": [
+                        "IBM Plex Sans"
+                ],
+                "label-bold": [
+                        "IBM Plex Sans"
+                ],
+                "body-lg": [
+                        "IBM Plex Sans"
+                ]
+        },
+        "fontSize": {
+                "headline-lg": [
+                        "32px",
+                        {
+                                "lineHeight": "40px",
+                                "letterSpacing": "-0.01em",
+                                "fontWeight": "600"
+                        }
+                ],
+                "headline-lg-mobile": [
+                        "28px",
+                        {
+                                "lineHeight": "36px",
+                                "letterSpacing": "-0.01em",
+                                "fontWeight": "600"
+                        }
+                ],
+                "body-md": [
+                        "14px",
+                        {
+                                "lineHeight": "20px",
+                                "letterSpacing": "0.01em",
+                                "fontWeight": "400"
+                        }
+                ],
+                "label-sm": [
+                        "12px",
+                        {
+                                "lineHeight": "16px",
+                                "letterSpacing": "0.02em",
+                                "fontWeight": "400"
+                        }
+                ],
+                "headline-sm": [
+                        "20px",
+                        {
+                                "lineHeight": "28px",
+                                "letterSpacing": "0",
+                                "fontWeight": "500"
+                        }
+                ],
+                "headline-md": [
+                        "24px",
+                        {
+                                "lineHeight": "32px",
+                                "letterSpacing": "0",
+                                "fontWeight": "500"
+                        }
+                ],
+                "label-bold": [
+                        "12px",
+                        {
+                                "lineHeight": "16px",
+                                "letterSpacing": "0.02em",
+                                "fontWeight": "600"
+                        }
+                ],
+                "body-lg": [
+                        "16px",
+                        {
+                                "lineHeight": "24px",
+                                "letterSpacing": "0",
+                                "fontWeight": "400"
+                        }
+                ]
+        }
+},
+    },
+  }
+</script>
+<style>
+        body {
+            font-family: 'IBM Plex Sans', sans-serif;
+        }
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+        }
+        .material-symbols-outlined.fill-icon {
+            font-variation-settings: 'FILL' 1, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+        }
+        body {
+            min-height: max(884px, 100dvh);
+        }
+    </style>
+</head>
+<body class="bg-background text-on-background antialiased min-h-screen flex flex-col">
+<!-- TopAppBar -->
+<header class="fixed top-0 z-40 bg-surface text-primary flex justify-between items-center w-full px-4 h-12 border-b border-outline-variant transition-colors duration-150 ease-in-out">
+<button aria-label="Menu" class="flex items-center justify-center p-2 text-on-surface hover:bg-surface-container transition-colors duration-150 ease-in-out rounded-full">
+<span class="material-symbols-outlined">equalizer</span>
+</button>
+<span class="text-lg font-semibold tracking-tight text-on-surface">Pure Audio</span>
+<button aria-label="Search" class="flex items-center justify-center p-2 text-on-surface hover:bg-surface-container transition-colors duration-150 ease-in-out rounded-full">
+<span class="material-symbols-outlined">search</span>
+</button>
+</header>
+<!-- Main Content Canvas -->
+<main class="flex-grow pt-16 pb-24 px-4 md:px-8 max-w-4xl mx-auto w-full">
+<!-- Header Section -->
+<section class="mb-8 flex flex-col md:flex-row md:items-end justify-between gap-4">
+<div>
+<h1 class="text-headline-lg-mobile md:text-headline-lg font-semibold tracking-tight text-on-background mb-2">Favorites</h1>
+<p class="text-body-md text-on-surface-variant">142 songs • 8 hrs 15 mins</p>
+</div>
+<button class="flex items-center justify-center gap-2 bg-primary-container text-on-primary-container hover:brightness-110 transition-all duration-200 px-6 py-3 rounded text-body-md font-medium h-12 w-full md:w-auto min-w-[120px]">
+<span class="material-symbols-outlined fill-icon">play_arrow</span>
+                Play All
+            </button>
+</section>
+<!-- Data Dense List -->
+<section class="flex flex-col border-t border-outline-variant">
+<!-- List Header -->
+<div class="hidden md:flex items-center justify-between py-2 border-b border-outline-variant text-label-bold text-secondary uppercase tracking-wider px-2">
+<div class="flex-grow flex items-center">
+<span class="w-8 text-center mr-4">#</span>
+<span class="flex-grow">Title</span>
+</div>
+<div class="flex items-center w-64">
+<span class="flex-grow">Artist</span>
+<span class="w-16 text-right mr-4 material-symbols-outlined text-[16px]">schedule</span>
+<span class="w-8 text-center"></span>
+</div>
+</div>
+<!-- List Items -->
+<!-- Song 1 -->
+<div class="group flex items-center justify-between py-3 border-b border-outline-variant hover:bg-surface-container transition-colors duration-150 px-2 cursor-pointer">
+<div class="flex-grow flex items-center gap-4 overflow-hidden">
+<span class="w-8 text-center text-secondary text-body-md hidden md:block">1</span>
+<img alt="" class="w-10 h-10 object-cover bg-surface-container-high rounded-sm flex-shrink-0" src="https://lh3.googleusercontent.com/aida-public/AB6AXuAgAV3f6hxYhmYg4ZtRS9U5ncDYyn0pJMDhPdfed1fgIF0XDbyTUmpR5EVUyJVbAdzXdUy7JWjvssxx-UMaNulsSzMo45jqilSIGJ8aSmt6Tq9PWNhQtKr9IHSETR6G3LtDZO7ICie78-Ap75Cgg7IrdJsQL--6GGuNAioiUrqN2OqO0n58e-uv6NibeEvC8ZfnYpfhRBijma_WZB4Ps6YXwtN5X3ODiz620fvBLStpEQo-7PUxV5083-9EV6t8uTaY5-MZLIEV0sk"/>
+<div class="flex flex-col overflow-hidden">
+<span class="text-body-md font-medium text-on-background truncate">Midnight City Lights</span>
+<span class="text-label-sm text-on-surface-variant truncate md:hidden">The Synthwave Project</span>
+</div>
+</div>
+<div class="flex items-center flex-shrink-0 ml-4 md:w-64">
+<span class="text-body-md text-on-surface-variant truncate flex-grow hidden md:block">The Synthwave Project</span>
+<span class="text-body-md text-on-surface-variant w-12 text-right mr-4">4:12</span>
+<button aria-label="Remove from favorites" class="text-primary hover:text-primary-fixed transition-colors p-1">
+<span class="material-symbols-outlined fill-icon text-[20px]">favorite</span>
+</button>
+</div>
+</div>
+<!-- Song 2 -->
+<div class="group flex items-center justify-between py-3 border-b border-outline-variant hover:bg-surface-container transition-colors duration-150 px-2 cursor-pointer">
+<div class="flex-grow flex items-center gap-4 overflow-hidden">
+<span class="w-8 text-center text-secondary text-body-md hidden md:block">2</span>
+<img alt="" class="w-10 h-10 object-cover bg-surface-container-high rounded-sm flex-shrink-0" src="https://lh3.googleusercontent.com/aida-public/AB6AXuDdTBQo5WJYqbpZ9EtljCq-14Cu3HcTVYwuOQ7UhtrT7etA76hsdbUbCOfPVEdVmBC6xwc7YyAroRtybxwnoIjemh5zkObr0tI4kJEMxB02Btgn_GLb2rF2gHtzYbm9m0fS_aTpj87w4LiRH9mX7w-a7wIrAMjY5uhql_c2qvsi0F213MglCm9wUsVxuinYbfWlOOH-yThHVWxPOdcgAkqkt3F8ifdHDtsHI-k5CjUl1oZPHD6GiiFiByNhqy6C2Qdkj0AF5zLAxxo"/>
+<div class="flex flex-col overflow-hidden">
+<span class="text-body-md font-medium text-on-background truncate">Analog Dreams</span>
+<span class="text-label-sm text-on-surface-variant truncate md:hidden">Circuit Board</span>
+</div>
+</div>
+<div class="flex items-center flex-shrink-0 ml-4 md:w-64">
+<span class="text-body-md text-on-surface-variant truncate flex-grow hidden md:block">Circuit Board</span>
+<span class="text-body-md text-on-surface-variant w-12 text-right mr-4">3:45</span>
+<button aria-label="Remove from favorites" class="text-primary hover:text-primary-fixed transition-colors p-1">
+<span class="material-symbols-outlined fill-icon text-[20px]">favorite</span>
+</button>
+</div>
+</div>
+<!-- Song 3 -->
+<div class="group flex items-center justify-between py-3 border-b border-outline-variant hover:bg-surface-container transition-colors duration-150 px-2 cursor-pointer">
+<div class="flex-grow flex items-center gap-4 overflow-hidden">
+<span class="w-8 text-center text-secondary text-body-md hidden md:block">3</span>
+<div class="w-10 h-10 bg-surface-container-highest rounded-sm flex-shrink-0 flex items-center justify-center">
+<span class="material-symbols-outlined text-secondary">music_note</span>
+</div>
+<div class="flex flex-col overflow-hidden">
+<span class="text-body-md font-medium text-on-background truncate">Data Stream Echoes</span>
+<span class="text-label-sm text-on-surface-variant truncate md:hidden">System Protocol</span>
+</div>
+</div>
+<div class="flex items-center flex-shrink-0 ml-4 md:w-64">
+<span class="text-body-md text-on-surface-variant truncate flex-grow hidden md:block">System Protocol</span>
+<span class="text-body-md text-on-surface-variant w-12 text-right mr-4">5:20</span>
+<button aria-label="Remove from favorites" class="text-primary hover:text-primary-fixed transition-colors p-1">
+<span class="material-symbols-outlined fill-icon text-[20px]">favorite</span>
+</button>
+</div>
+</div>
+<!-- Song 4 -->
+<div class="group flex items-center justify-between py-3 border-b border-outline-variant hover:bg-surface-container transition-colors duration-150 px-2 cursor-pointer">
+<div class="flex-grow flex items-center gap-4 overflow-hidden">
+<span class="w-8 text-center text-secondary text-body-md hidden md:block">4</span>
+<img alt="" class="w-10 h-10 object-cover bg-surface-container-high rounded-sm flex-shrink-0" src="https://lh3.googleusercontent.com/aida-public/AB6AXuBm2GzXtBoUAgmr8m6_CUuRv8HAlvBXK_WFQynKZgcUx0Zvgvl0FL4lJFIKF0GUWj75mTG8Lvv1z1wZNmY0gXnkhK3SpcPtRxhU_eIp6pwmi_HnWUhq0IHmJw0Jwg8B9DBOWgdsxoh2YrArtLZPEMz8rxB4B_8tDmBnizQcDZKUY8wd99a2c3prxz8XcVL4DrGDTNtt7Lj3hO8ZDYO1OnXbV0im9eWKgekYaHvalqMPVPTL7haTN19fMlSO6T9lZS5nv8m-QnJ55IQ"/>
+<div class="flex flex-col overflow-hidden">
+<span class="text-body-md font-medium text-on-background truncate">Quantum Leap</span>
+<span class="text-label-sm text-on-surface-variant truncate md:hidden">The Innovators</span>
+</div>
+</div>
+<div class="flex items-center flex-shrink-0 ml-4 md:w-64">
+<span class="text-body-md text-on-surface-variant truncate flex-grow hidden md:block">The Innovators</span>
+<span class="text-body-md text-on-surface-variant w-12 text-right mr-4">2:58</span>
+<button aria-label="Remove from favorites" class="text-primary hover:text-primary-fixed transition-colors p-1">
+<span class="material-symbols-outlined fill-icon text-[20px]">favorite</span>
+</button>
+</div>
+</div>
+</section>
+</main>
+<!-- BottomNavBar -->
+<nav class="fixed bottom-0 w-full flex justify-around items-center bg-surface pb-safe border-t border-outline-variant z-50 h-16 md:hidden">
+<!-- Home (Inactive) -->
+<a class="flex flex-col items-center justify-center text-secondary pt-2 hover:text-on-surface active:opacity-80 transition-all text-label-sm font-medium w-full h-full" href="#">
+<span class="material-symbols-outlined mb-1 text-[24px]">home</span>
+<span>Home</span>
+</a>
+<!-- Library (Inactive) -->
+<a class="flex flex-col items-center justify-center text-secondary pt-2 hover:text-on-surface active:opacity-80 transition-all text-label-sm font-medium w-full h-full" href="#">
+<span class="material-symbols-outlined mb-1 text-[24px]">folder_open</span>
+<span>Library</span>
+</a>
+<!-- Favorites (Active) -->
+<a class="flex flex-col items-center justify-center text-primary font-semibold border-t-2 border-primary pt-2 active:opacity-80 transition-all text-label-sm w-full h-full" href="#">
+<span class="material-symbols-outlined fill-icon mb-1 text-[24px]">favorite</span>
+<span>Favorites</span>
+</a>
+</nav>
+</body></html>

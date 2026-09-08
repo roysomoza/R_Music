@@ -1,0 +1,234 @@
+<!DOCTYPE html>
+
+<html class="light" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" name="viewport"/>
+<title>Library - Pure Audio</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@300;400;600&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    "colors": {
+                        "tertiary": "#198038",
+                        "on-background": "#161616",
+                        "outline-variant": "#e0e0e0",
+                        "primary-container": "#d0e2ff",
+                        "on-secondary-fixed": "#161616",
+                        "on-tertiary-fixed-variant": "#044317",
+                        "inverse-primary": "#78a9ff",
+                        "primary-fixed": "#d0e2ff",
+                        "surface-container": "#f4f4f4",
+                        "surface-tint": "#0f62fe",
+                        "surface-container-lowest": "#ffffff",
+                        "error-container": "#fff1f1",
+                        "tertiary-fixed": "#a7f0ba",
+                        "surface-dim": "#e0e0e0",
+                        "on-surface-variant": "#525252",
+                        "on-tertiary-fixed": "#022d0d",
+                        "secondary": "#6f6f6f",
+                        "secondary-fixed-dim": "#c6c6c6",
+                        "secondary-fixed": "#e0e0e0",
+                        "surface-container-highest": "#c6c6c6",
+                        "surface-variant": "#f4f4f4",
+                        "tertiary-fixed-dim": "#42be65",
+                        "on-primary-fixed-variant": "#0043ce",
+                        "surface": "#ffffff",
+                        "on-secondary-container": "#525252",
+                        "surface-container-high": "#e0e0e0",
+                        "primary": "#0f62fe",
+                        "background": "#f4f4f4",
+                        "secondary-container": "#e0e0e0",
+                        "inverse-on-surface": "#f4f4f4",
+                        "tertiary-container": "#a7f0ba",
+                        "outline": "#8d8d8d",
+                        "on-secondary": "#ffffff",
+                        "error": "#da1e28",
+                        "surface-bright": "#ffffff",
+                        "on-surface": "#161616",
+                        "primary-fixed-dim": "#78a9ff",
+                        "on-tertiary-container": "#044317",
+                        "on-primary": "#ffffff",
+                        "on-primary-container": "#161616",
+                        "on-secondary-fixed-variant": "#525252",
+                        "on-primary-fixed": "#001d6c",
+                        "on-error-container": "#750e13",
+                        "on-error": "#ffffff",
+                        "on-tertiary": "#ffffff",
+                        "surface-container-low": "#f4f4f4",
+                        "inverse-surface": "#393939"
+                    },
+                    "borderRadius": {
+                        "DEFAULT": "0.125rem",
+                        "lg": "0.25rem",
+                        "xl": "0.5rem",
+                        "full": "0.75rem"
+                    },
+                    "spacing": {},
+                    "fontFamily": {
+                        "headline": ["IBM Plex Sans", "sans-serif"],
+                        "display": ["IBM Plex Sans", "sans-serif"],
+                        "body": ["IBM Plex Sans", "sans-serif"],
+                        "label": ["IBM Plex Sans", "sans-serif"]
+                    },
+                    "fontSize": {
+                        "label-sm": ["12px", "16px"],
+                        "body-md": ["14px", "20px"],
+                        "headline-sm": ["20px", "28px"],
+                        "headline-md": ["24px", "32px"]
+                    }
+                },
+            },
+        }
+    </script>
+<style>
+        body { font-family: 'IBM Plex Sans', sans-serif; }
+        .material-symbols-outlined { font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24; }
+        .icon-filled { font-variation-settings: 'FILL' 1, 'wght' 400, 'GRAD' 0, 'opsz' 24; }
+        .pb-safe { padding-bottom: env(safe-area-inset-bottom); }
+        .pt-safe { padding-top: env(safe-area-inset-top); }
+    </style>
+<style>
+    body {
+      min-height: max(884px, 100dvh);
+    }
+  </style>
+</head>
+<body class="bg-background text-on-background min-h-screen flex flex-col antialiased">
+<!-- TopAppBar -->
+<header class="bg-surface border-b border-outline-variant transition-colors duration-150 ease-in-out docked full-width top-0 z-40 sticky pt-safe">
+<div class="flex justify-between items-center w-full px-4 h-12">
+<button aria-label="Menu" class="flex items-center justify-center w-8 h-8 text-on-surface hover:bg-surface-container rounded transition-colors duration-150 ease-in-out">
+<span class="material-symbols-outlined" data-icon="equalizer">equalizer</span>
+</button>
+<h1 class="font-headline text-headline-sm font-semibold tracking-tight text-on-surface text-center flex-1 mx-4">Pure Audio</h1>
+<button aria-label="Search" class="flex items-center justify-center w-8 h-8 text-on-surface hover:bg-surface-container rounded transition-colors duration-150 ease-in-out">
+<span class="material-symbols-outlined" data-icon="search">search</span>
+</button>
+</div>
+</header>
+<!-- Main Content -->
+<main class="flex-1 overflow-y-auto pb-24 px-4 pt-6 max-w-4xl mx-auto w-full">
+<!-- Scan Action Area -->
+<div class="flex justify-between items-center mb-6 pb-4 border-b border-outline-variant">
+<div>
+<h2 class="font-headline text-headline-md font-semibold text-on-background">Local Folders</h2>
+<p class="font-body text-body-md text-on-surface-variant mt-1">Found 4 folders containing audio files</p>
+</div>
+<button class="bg-primary text-on-primary hover:bg-on-primary-fixed-variant transition-colors duration-200 h-12 px-6 flex items-center gap-2 font-body text-body-md font-semibold min-w-[120px] justify-center">
+<span class="material-symbols-outlined text-[20px]" data-icon="radar">radar</span>
+                Scan Device
+            </button>
+</div>
+<!-- Folder List Grid -->
+<div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+<!-- Folder Item 1 -->
+<div class="bg-surface hover:bg-surface-container transition-colors duration-200 p-4 flex items-start gap-4 cursor-pointer border border-transparent hover:border-outline-variant group">
+<div class="w-12 h-12 bg-surface-container-highest flex items-center justify-center text-primary group-hover:text-on-primary-fixed-variant transition-colors">
+<span class="material-symbols-outlined icon-filled text-[24px]" data-icon="folder" data-weight="fill">folder</span>
+</div>
+<div class="flex-1 min-w-0">
+<h3 class="font-body text-body-md font-semibold text-on-background truncate">Downloads</h3>
+<p class="font-label text-label-sm text-on-surface-variant truncate mt-1">/storage/emulated/0/Download</p>
+</div>
+<div class="flex flex-col items-end justify-center h-full">
+<span class="bg-surface-container-highest text-on-background px-2 py-1 font-label text-label-sm">42 files</span>
+</div>
+</div>
+<!-- Folder Item 2 -->
+<div class="bg-surface hover:bg-surface-container transition-colors duration-200 p-4 flex items-start gap-4 cursor-pointer border border-transparent hover:border-outline-variant group">
+<div class="w-12 h-12 bg-surface-container-highest flex items-center justify-center text-primary group-hover:text-on-primary-fixed-variant transition-colors">
+<span class="material-symbols-outlined icon-filled text-[24px]" data-icon="folder" data-weight="fill">folder</span>
+</div>
+<div class="flex-1 min-w-0">
+<h3 class="font-body text-body-md font-semibold text-on-background truncate">Music</h3>
+<p class="font-label text-label-sm text-on-surface-variant truncate mt-1">/storage/emulated/0/Music</p>
+</div>
+<div class="flex flex-col items-end justify-center h-full">
+<span class="bg-surface-container-highest text-on-background px-2 py-1 font-label text-label-sm">1,204 files</span>
+</div>
+</div>
+<!-- Folder Item 3 -->
+<div class="bg-surface hover:bg-surface-container transition-colors duration-200 p-4 flex items-start gap-4 cursor-pointer border border-transparent hover:border-outline-variant group">
+<div class="w-12 h-12 bg-surface-container-highest flex items-center justify-center text-primary group-hover:text-on-primary-fixed-variant transition-colors">
+<span class="material-symbols-outlined icon-filled text-[24px]" data-icon="folder" data-weight="fill">folder</span>
+</div>
+<div class="flex-1 min-w-0">
+<h3 class="font-body text-body-md font-semibold text-on-background truncate">Podcasts</h3>
+<p class="font-label text-label-sm text-on-surface-variant truncate mt-1">/storage/emulated/0/Podcasts</p>
+</div>
+<div class="flex flex-col items-end justify-center h-full">
+<span class="bg-surface-container-highest text-on-background px-2 py-1 font-label text-label-sm">18 files</span>
+</div>
+</div>
+<!-- Folder Item 4 -->
+<div class="bg-surface hover:bg-surface-container transition-colors duration-200 p-4 flex items-start gap-4 cursor-pointer border border-transparent hover:border-outline-variant group">
+<div class="w-12 h-12 bg-surface-container-highest flex items-center justify-center text-primary group-hover:text-on-primary-fixed-variant transition-colors">
+<span class="material-symbols-outlined text-[24px]" data-icon="sd_card">sd_card</span>
+</div>
+<div class="flex-1 min-w-0">
+<h3 class="font-body text-body-md font-semibold text-on-background truncate">SD Card Audio</h3>
+<p class="font-label text-label-sm text-on-surface-variant truncate mt-1">/storage/0000-0000/Audio</p>
+</div>
+<div class="flex flex-col items-end justify-center h-full">
+<span class="bg-surface-container-highest text-on-background px-2 py-1 font-label text-label-sm">345 files</span>
+</div>
+</div>
+</div>
+<!-- Add Folder Manual Action -->
+<div class="mt-8">
+<button class="w-full md:w-auto border border-outline-variant bg-surface text-on-background hover:bg-surface-container transition-colors duration-200 h-12 px-6 flex items-center justify-center gap-2 font-body text-body-md font-semibold">
+<span class="material-symbols-outlined text-[20px]" data-icon="add">add</span>
+                Add Folder Manually
+            </button>
+</div>
+</main>
+<!-- BottomNavBar -->
+<nav class="fixed bottom-0 w-full flex justify-around items-center bg-surface pb-safe border-t border-outline-variant z-50 md:hidden h-16">
+<!-- Inactive: Home -->
+<a class="flex flex-col items-center justify-center text-secondary hover:text-on-surface active:opacity-80 transition-all pt-2 w-full h-full" href="#">
+<span class="material-symbols-outlined text-[24px] mb-1" data-icon="home">home</span>
+<span class="font-label text-[10px] font-medium">Home</span>
+</a>
+<!-- Active: Library -->
+<a class="flex flex-col items-center justify-center text-primary font-semibold border-t-2 border-primary pt-2 w-full h-full bg-surface relative -top-[2px]" href="#">
+<span class="material-symbols-outlined icon-filled text-[24px] mb-1" data-icon="folder_open" data-weight="fill">folder_open</span>
+<span class="font-label text-[10px] font-medium">Library</span>
+</a>
+<!-- Inactive: Favorites -->
+<a class="flex flex-col items-center justify-center text-secondary hover:text-on-surface active:opacity-80 transition-all pt-2 w-full h-full" href="#">
+<span class="material-symbols-outlined text-[24px] mb-1" data-icon="favorite">favorite</span>
+<span class="font-label text-[10px] font-medium">Favorites</span>
+</a>
+</nav>
+<!-- Web Navigation (Hidden on Mobile) -->
+<nav class="hidden md:flex fixed left-0 top-12 bottom-0 w-64 bg-surface-container border-r border-outline-variant flex-col p-4 z-30">
+<div class="space-y-2 mt-4">
+<a class="flex items-center gap-3 px-4 py-3 text-on-surface-variant hover:bg-surface-container-high transition-colors text-body-md font-body" href="#">
+<span class="material-symbols-outlined" data-icon="home">home</span>
+                Home
+            </a>
+<a class="flex items-center gap-3 px-4 py-3 bg-surface border-l-4 border-primary text-primary font-semibold transition-colors text-body-md font-body" href="#">
+<span class="material-symbols-outlined icon-filled" data-icon="folder_open" data-weight="fill">folder_open</span>
+                Library
+            </a>
+<a class="flex items-center gap-3 px-4 py-3 text-on-surface-variant hover:bg-surface-container-high transition-colors text-body-md font-body" href="#">
+<span class="material-symbols-outlined" data-icon="favorite">favorite</span>
+                Favorites
+            </a>
+</div>
+</nav>
+<!-- Adjust main content margin for web nav -->
+<style>
+        @media (min-width: 768px) {
+            main {
+                margin-left: 16rem;
+                max-width: calc(100% - 16rem);
+            }
+        }
+    </style>
+</body></html>
