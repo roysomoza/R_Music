@@ -1,4 +1,4 @@
-﻿name: Build iOS Installer (.ipa)
+name: Build iOS Installer (.ipa)
 
 on:
   push:
@@ -14,17 +14,14 @@ jobs:
       - name: Checkout Code
         uses: actions/checkout@v4
 
-      - name: Set up Java JDK
-        uses: actions/setup-java@v4
-        with:
-          distribution: 'temurin'
-          java-version: '17'
-
       - name: Set up Flutter
         uses: subosito/flutter-action@v2
         with:
           channel: 'stable'
           cache: true
+
+      - name: Precache iOS Artifacts
+        run: flutter precache --ios
 
       - name: Install Dependencies
         run: flutter pub get
