@@ -281,20 +281,23 @@ class _LibraryScreenState extends State<LibraryScreen> with SingleTickerProvider
 
   @override
   Widget build(BuildContext context) {
-    // Filter tracks by search query
-    List<TrackModel> filteredTracks = widget.tracks.where((t) {
-      final q = _searchQuery.toLowerCase();
-      return t.title.toLowerCase().contains(q) || t.artist.toLowerCase().contains(q);
-    }).toList();
-
-    // Sort tracks
+    // All tracks sorted according to active sort mode
+    final allTracks = List<TrackModel>.from(widget.tracks);
     if (_activeSort == 'title') {
-      filteredTracks.sort((a, b) => a.title.toLowerCase().compareTo(b.title.toLowerCase()));
+      allTracks.sort((a, b) => a.title.toLowerCase().compareTo(b.title.toLowerCase()));
     } else if (_activeSort == 'artist') {
-      filteredTracks.sort((a, b) => a.artist.toLowerCase().compareTo(b.artist.toLowerCase()));
+      allTracks.sort((a, b) => a.artist.toLowerCase().compareTo(b.artist.toLowerCase()));
     } else {
-      filteredTracks.sort((a, b) => b.dateAdded.compareTo(a.dateAdded));
+      allTracks.sort((a, b) => b.dateAdded.compareTo(a.dateAdded));
     }
+
+    // Filter tracks by search query
+    final List<TrackModel> filteredTracks = _searchQuery.isEmpty
+        ? allTracks
+        : allTracks.where((t) {
+            final q = _searchQuery.toLowerCase();
+            return t.title.toLowerCase().contains(q) || t.artist.toLowerCase().contains(q);
+          }).toList();
 
     final dateGroups = _groupTracksByDate(filteredTracks);
 
@@ -557,7 +560,7 @@ class _LibraryScreenState extends State<LibraryScreen> with SingleTickerProvider
               // ── MAIN CONTENT VIEW (CANCIONES OR CARPETAS) ──
               Expanded(
                 child: _selectedTabIndex == 0
-                    ? _buildTracksView(filteredTracks, dateGroups)
+                    ? _buildTracksView(allTracks, filteredTracks, dateGroups)
                     : _buildFoldersView(filteredFolders),
               ),
             ],
@@ -570,7 +573,7 @@ class _LibraryScreenState extends State<LibraryScreen> with SingleTickerProvider
   // ══════════════════════════════════════════════════════════════════════════
   // TRACKS VIEW
   // ══════════════════════════════════════════════════════════════════════════
-  Widget _buildTracksView(List<TrackModel> filteredTracks, Map<String, List<TrackModel>> dateGroups) {
+  Widget _buildTracksView(List<TrackModel> allTracks, List<TrackModel> filteredTracks, Map<String, List<TrackModel>> dateGroups) {
     if (widget.isLoading && widget.tracks.isEmpty) {
       return const Center(
         child: Column(
@@ -656,18 +659,20 @@ class _LibraryScreenState extends State<LibraryScreen> with SingleTickerProvider
                 isFavorite: isFav,
                 dateBadge: _formatDateBadge(track.dateAdded),
                 onTap: () {
-                  final globalIdx = filteredTracks.indexWhere((t) => t.path == track.path);
-                  widget.onPlayTrack(filteredTracks, globalIdx >= 0 ? globalIdx : 0);
+                  final originalIndex = allTracks.indexOf(track);
+                  final playIndex = originalIndex != -1 ? originalIndex : 0;
+                  widget.onPlayTrack(allTracks, playIndex);
                 },
                 onToggleFavorite: () => widget.onToggleFavorite(track.path),
                 onLongPress: () {
-                  final globalIdx = filteredTracks.indexWhere((t) => t.path == track.path);
+                  final originalIndex = allTracks.indexOf(track);
+                  final playIndex = originalIndex != -1 ? originalIndex : 0;
                   TrackOptionsSheet.show(
                     context: context,
                     track: track,
                     isFavorite: isFav,
                     folders: widget.folders,
-                    onPlayNow: () => widget.onPlayTrack(filteredTracks, globalIdx >= 0 ? globalIdx : 0),
+                    onPlayNow: () => widget.onPlayTrack(allTracks, playIndex),
                     onToggleFavorite: () => widget.onToggleFavorite(track.path),
                     onAddToFolder: (f) => widget.onAddToFolder(f, track),
                     onCreateAndAddToFolder: (name) => widget.onCreateAndAddToFolder(name, track),
@@ -683,13 +688,15 @@ class _LibraryScreenState extends State<LibraryScreen> with SingleTickerProvider
           final track = filteredTracks[index];
           final isPlaying = widget.currentPlayingPath == track.path;
           final isFav = widget.favorites.contains(track.path);
+          final originalIndex = allTracks.indexOf(track);
+          final playIndex = originalIndex != -1 ? originalIndex : index;
 
           return TrackTile(
             track: track,
             isPlaying: isPlaying,
             isFavorite: isFav,
             dateBadge: _formatDateBadge(track.dateAdded),
-            onTap: () => widget.onPlayTrack(filteredTracks, index),
+            onTap: () => widget.onPlayTrack(allTracks, playIndex),
             onToggleFavorite: () => widget.onToggleFavorite(track.path),
             onLongPress: () {
               TrackOptionsSheet.show(
@@ -697,7 +704,7 @@ class _LibraryScreenState extends State<LibraryScreen> with SingleTickerProvider
                 track: track,
                 isFavorite: isFav,
                 folders: widget.folders,
-                onPlayNow: () => widget.onPlayTrack(filteredTracks, index),
+                onPlayNow: () => widget.onPlayTrack(allTracks, playIndex),
                 onToggleFavorite: () => widget.onToggleFavorite(track.path),
                 onAddToFolder: (f) => widget.onAddToFolder(f, track),
                 onCreateAndAddToFolder: (name) => widget.onCreateAndAddToFolder(name, track),

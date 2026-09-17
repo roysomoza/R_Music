@@ -495,7 +495,11 @@ class _FolderDetailScreenState extends State<FolderDetailScreen> {
                           Expanded(
                             child: ElevatedButton.icon(
                               onPressed: filteredTracks.isNotEmpty
-                                  ? () => widget.onPlayTrack(filteredTracks, 0)
+                                  ? () {
+                                      final originalIndex = folderTracks.indexOf(filteredTracks.first);
+                                      final playIndex = originalIndex != -1 ? originalIndex : 0;
+                                      widget.onPlayTrack(folderTracks, playIndex);
+                                    }
                                   : null,
                               icon: const Icon(Icons.play_arrow_rounded, size: 22),
                               label: const Text(
@@ -627,13 +631,15 @@ class _FolderDetailScreenState extends State<FolderDetailScreen> {
                           final track = filteredTracks[index];
                           final isPlaying = widget.currentPlayingPath == track.path;
                           final isFav = widget.favorites.contains(track.path);
+                          final originalIndex = folderTracks.indexOf(track);
+                          final playIndex = originalIndex != -1 ? originalIndex : index;
 
                           return TrackTile(
                             track: track,
                             isPlaying: isPlaying,
                             isFavorite: isFav,
                             index: index + 1,
-                            onTap: () => widget.onPlayTrack(filteredTracks, index),
+                            onTap: () => widget.onPlayTrack(folderTracks, playIndex),
                             onToggleFavorite: () => widget.onToggleFavorite(track.path),
                             onLongPress: () {
                               TrackOptionsSheet.show(
@@ -642,7 +648,7 @@ class _FolderDetailScreenState extends State<FolderDetailScreen> {
                                 isFavorite: isFav,
                                 folders: widget.allFolders,
                                 currentFolderId: widget.folder.id,
-                                onPlayNow: () => widget.onPlayTrack(filteredTracks, index),
+                                onPlayNow: () => widget.onPlayTrack(folderTracks, playIndex),
                                 onToggleFavorite: () => widget.onToggleFavorite(track.path),
                                 onAddToFolder: (f) => widget.onAddToFolder(f, track),
                                 onCreateAndAddToFolder: (name) => widget.onCreateAndAddToFolder(name, track),

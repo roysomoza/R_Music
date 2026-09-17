@@ -129,7 +129,11 @@ class _FavoritesScreenState extends State<FavoritesScreen> {
                       // Play All Button with Neon Glow
                       ElevatedButton.icon(
                         onPressed: filteredFavorites.isNotEmpty
-                            ? () => widget.onPlayAll(filteredFavorites)
+                            ? () {
+                                final originalIndex = widget.favoriteTracks.indexOf(filteredFavorites.first);
+                                final playIndex = originalIndex != -1 ? originalIndex : 0;
+                                widget.onPlayTrack(widget.favoriteTracks, playIndex);
+                              }
                             : null,
                         icon: const Icon(Icons.play_arrow_rounded, size: 22),
                         label: const Text(
@@ -233,13 +237,15 @@ class _FavoritesScreenState extends State<FavoritesScreen> {
                         itemBuilder: (context, index) {
                           final track = filteredFavorites[index];
                           final isPlaying = widget.currentPlayingPath == track.path;
+                          final originalIndex = widget.favoriteTracks.indexOf(track);
+                          final playIndex = originalIndex != -1 ? originalIndex : index;
 
                           return TrackTile(
                             track: track,
                             isPlaying: isPlaying,
                             isFavorite: true,
                             index: index + 1,
-                            onTap: () => widget.onPlayTrack(filteredFavorites, index),
+                            onTap: () => widget.onPlayTrack(widget.favoriteTracks, playIndex),
                             onToggleFavorite: () => widget.onToggleFavorite(track.path),
                             onLongPress: () {
                               TrackOptionsSheet.show(
@@ -247,7 +253,7 @@ class _FavoritesScreenState extends State<FavoritesScreen> {
                                 track: track,
                                 isFavorite: true,
                                 folders: widget.folders,
-                                onPlayNow: () => widget.onPlayTrack(filteredFavorites, index),
+                                onPlayNow: () => widget.onPlayTrack(widget.favoriteTracks, playIndex),
                                 onToggleFavorite: () => widget.onToggleFavorite(track.path),
                                 onAddToFolder: (f) => widget.onAddToFolder(f, track),
                                 onCreateAndAddToFolder: (name) => widget.onCreateAndAddToFolder(name, track),
