@@ -47,6 +47,7 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
   Set<String> _favorites = {};
   bool _isLoading = false;
   Uri? _defaultArtUri;
+  final List<StreamSubscription> _screenSubscriptions = [];
 
   @override
   void initState() {
@@ -55,36 +56,44 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
     _musicRepoImpl = MusicRepositoryImpl();
     _playerStore = PlayerStore(playerRepo: _audioRepo, musicRepo: _musicRepoImpl);
 
-    _playerStore.effectStream.listen((effect) {
-      if (effect is ShowToastEffect) {
-        _showSnackBar(effect.message);
-      } else if (effect is ShowErrorEffect) {
-        _showSnackBar(effect.message);
-      } else if (effect is SleepTimerExpiredEffect) {
-        _showSnackBar('Temporizador de apagado completado. Reproducción pausada.');
-      }
-    });
+    _screenSubscriptions.add(
+      _playerStore.effectStream.listen((effect) {
+        if (!mounted) return;
+        if (effect is ShowToastEffect) {
+          _showSnackBar(effect.message);
+        } else if (effect is ShowErrorEffect) {
+          _showSnackBar(effect.message);
+        } else if (effect is SleepTimerExpiredEffect) {
+          _showSnackBar('Temporizador de apagado completado. Reproducción pausada.');
+        }
+      }),
+    );
 
     _initializeApp();
 
     // Native Lock Screen & Notification Listener
-    _audioPlayer.currentIndexStream.listen((index) {
-      if (index != null &&
-          _currentPlaylist.isNotEmpty &&
-          index >= 0 &&
-          index < _currentPlaylist.length &&
-          index != _currentPlayingIndex) {
-        setState(() => _currentPlayingIndex = index);
-        _savePlaybackState();
-      }
-    });
+    _screenSubscriptions.add(
+      _audioPlayer.currentIndexStream.listen((index) {
+        if (mounted &&
+            index != null &&
+            _currentPlaylist.isNotEmpty &&
+            index >= 0 &&
+            index < _currentPlaylist.length &&
+            index != _currentPlayingIndex) {
+          setState(() => _currentPlayingIndex = index);
+          _savePlaybackState();
+        }
+      }),
+    );
   }
 
   @override
   void dispose() {
+    for (final sub in _screenSubscriptions) {
+      sub.cancel();
+    }
     _playerStore.dispose();
     _audioRepo.dispose();
-    _audioPlayer.dispose();
     super.dispose();
   }
 
@@ -155,7 +164,7 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
           });
 
           try {
-            final track = restoredPlaylist[index];
+            final track = cleanRestored[safeIndex];
             await _audioPlayer.setAudioSource(
               AudioSource.uri(
                 Uri.file(track.path),
@@ -167,7 +176,7 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
                   artUri: _defaultArtUri,
                 ),
               ),
-              preload: true,
+              preload: false,
             );
           } catch (e) {
             debugPrint("Error preloading audio on startup: $e");
@@ -230,7 +239,7 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
     await _repository.saveFavorites(_favorites);
   }
 
-  void _playTrack(List<TrackModel> playlist, int index) async {
+  void _playTrack(List<TrackModel> playlist, int index) {
     if (playlist.isEmpty || index < 0 || index >= playlist.length) return;
 
     try {
@@ -239,30 +248,7 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
         _currentPlayingIndex = index;
       });
 
-      final sources = playlist.map((track) {
-        return AudioSource.uri(
-          Uri.file(track.path),
-          tag: MediaItem(
-            id: track.path,
-            title: track.title,
-            artist: track.artist,
-            album: track.album,
-            artUri: _defaultArtUri,
-          ),
-        );
-      }).toList();
-
-      await _audioRepo.stop();
-      // ignore: deprecated_member_use
-      await _audioPlayer.setAudioSource(
-        // ignore: deprecated_member_use
-        ConcatenatingAudioSource(children: sources),
-        initialIndex: index,
-      );
-      await _audioRepo.play();
-      await _savePlaybackState();
-
-      // Synchronize MVI PlayerStore
+      // Synchronize MVI PlayerStore as the single source of truth for queue & playback
       final currentModel = playlist[index];
       final domainTrack = Track(
         id: currentModel.id,
@@ -286,7 +272,9 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
         fileSize: t.fileSize,
         isFavorite: _favorites.contains(t.path),
       )).toList();
+
       _playerStore.dispatch(PlayTrackIntent(domainTrack, queue: domainQueue, initialIndex: index));
+      _savePlaybackState();
     } catch (e) {
       _showSnackBar('Error al reproducir el archivo: $e');
       debugPrint("Playback error: $e");

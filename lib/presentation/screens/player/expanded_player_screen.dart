@@ -33,6 +33,7 @@ class ExpandedPlayerScreen extends StatefulWidget {
 
 class _ExpandedPlayerScreenState extends State<ExpandedPlayerScreen> {
   bool _showLyrics = false;
+  double? _dragValue;
 
   String _formatDuration(Duration d) {
     final m = d.inMinutes;
@@ -209,10 +210,19 @@ class _ExpandedPlayerScreenState extends State<ExpandedPlayerScreen> {
                       overlayShape: const RoundSliderOverlayShape(overlayRadius: 14.0),
                     ),
                     child: Slider(
-                      value: currVal,
+                      value: (_dragValue ?? currVal).clamp(0.0, maxVal > 0 ? maxVal : 1.0),
                       max: maxVal > 0 ? maxVal : 1.0,
+                      onChangeStart: maxVal > 0
+                          ? (val) => setState(() => _dragValue = val)
+                          : null,
                       onChanged: maxVal > 0
-                          ? (val) => widget.store.dispatch(SeekIntent(Duration(milliseconds: val.toInt())))
+                          ? (val) => setState(() => _dragValue = val)
+                          : null,
+                      onChangeEnd: maxVal > 0
+                          ? (val) {
+                              widget.store.dispatch(SeekIntent(Duration(milliseconds: val.toInt())));
+                              setState(() => _dragValue = null);
+                            }
                           : null,
                     ),
                   ),
@@ -222,7 +232,9 @@ class _ExpandedPlayerScreenState extends State<ExpandedPlayerScreen> {
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
                         Text(
-                          _formatDuration(state.position),
+                          _formatDuration(_dragValue != null
+                              ? Duration(milliseconds: _dragValue!.toInt())
+                              : state.position),
                           style: const TextStyle(
                             fontSize: 12,
                             color: AppTheme.textMuted,

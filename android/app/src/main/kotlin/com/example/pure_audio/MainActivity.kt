@@ -30,17 +30,25 @@ class MainActivity : AudioServiceActivity() {
                 }
                 "setEnabled" -> {
                     val enabled = call.argument<Boolean>("enabled") ?: true
-                    equalizer?.enabled = enabled
-                    bassBoost?.enabled = enabled
-                    result.success(true)
+                    try {
+                        equalizer?.enabled = enabled
+                        bassBoost?.enabled = enabled
+                        result.success(true)
+                    } catch (e: Exception) {
+                        result.success(false)
+                    }
                 }
                 "getPresets" -> {
-                    val eq = equalizer
-                    if (eq != null) {
-                        val numPresets = eq.numberOfPresets.toInt()
-                        val presets = (0 until numPresets).map { eq.getPresetName(it.toShort()) }
-                        result.success(presets)
-                    } else {
+                    try {
+                        val eq = equalizer
+                        if (eq != null) {
+                            val numPresets = eq.numberOfPresets.toInt()
+                            val presets = (0 until numPresets).map { eq.getPresetName(it.toShort()) }
+                            result.success(presets)
+                        } else {
+                            result.success(emptyList<String>())
+                        }
+                    } catch (e: Exception) {
                         result.success(emptyList<String>())
                     }
                 }

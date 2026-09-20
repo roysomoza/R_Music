@@ -128,6 +128,21 @@ class AudioPlayerRepositoryImpl implements IAudioPlayerRepository {
         }
       }),
     );
+
+    // 5. Playback event error listener to prevent hanging on corrupt or unreadable audio files
+    _subscriptions.add(
+      _player.playbackEventStream.listen(
+        (_) {},
+        onError: (Object error, StackTrace stackTrace) {
+          debugPrint('Audio playback event error: $error');
+          if (_queue.length > 1) {
+            skipToNext();
+          } else {
+            pause();
+          }
+        },
+      ),
+    );
   }
 
   /// Handles audio focus interruptions from other apps or system events.

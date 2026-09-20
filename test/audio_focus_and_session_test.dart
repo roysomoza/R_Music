@@ -19,6 +19,8 @@ class MockAudioPlayer implements AudioPlayer {
       StreamController<int?>.broadcast();
   final StreamController<bool> _playingController =
       StreamController<bool>.broadcast();
+  final StreamController<PlaybackEvent> _playbackEventController =
+      StreamController<PlaybackEvent>.broadcast();
 
   @override
   bool get playing => _playing;
@@ -30,6 +32,9 @@ class MockAudioPlayer implements AudioPlayer {
 
   @override
   double get volume => _volume;
+
+  @override
+  Stream<PlaybackEvent> get playbackEventStream => _playbackEventController.stream;
 
   @override
   Stream<int?> get currentIndexStream => _currentIndexController.stream;

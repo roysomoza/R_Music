@@ -187,7 +187,8 @@ class PlayerDock extends StatelessWidget {
               child: Slider(
                 value: currVal,
                 max: maxVal > 0 ? maxVal : 1.0,
-                onChanged: maxVal > 0
+                onChanged: maxVal > 0 ? (_) {} : null,
+                onChangeEnd: maxVal > 0
                     ? (val) => onSeek(Duration(milliseconds: val.toInt()))
                     : null,
               ),
