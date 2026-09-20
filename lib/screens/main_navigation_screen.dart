@@ -8,6 +8,7 @@ import 'package:flutter/services.dart';
 import 'package:just_audio/just_audio.dart';
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
+import '../core/platform/permission_handler_service.dart';
 import '../core/theme/app_theme.dart';
 import '../data/repositories/audio_player_repository_impl.dart';
 import '../data/repositories/music_repository_impl.dart';
@@ -104,6 +105,10 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
   Future<void> _initializeApp() async {
     setState(() => _isLoading = true);
     try {
+      // 0. Request storage and notification permissions for Android 13-16 / HyperOS
+      await PermissionHandlerService.requestStoragePermissions();
+      await PermissionHandlerService.requestNotificationPermission();
+
       // 1. Prepare artwork for system notification
       await _prepareDefaultArtwork();
 
@@ -247,14 +252,14 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
         );
       }).toList();
 
-      await _audioPlayer.stop();
+      await _audioRepo.stop();
       // ignore: deprecated_member_use
       await _audioPlayer.setAudioSource(
         // ignore: deprecated_member_use
         ConcatenatingAudioSource(children: sources),
         initialIndex: index,
       );
-      _audioPlayer.play();
+      await _audioRepo.play();
       await _savePlaybackState();
 
       // Synchronize MVI PlayerStore

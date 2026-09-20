@@ -22,6 +22,7 @@ dependencies:
   audio_service: ^0.18.12
   permission_handler: ^11.4.0
   audiotags: ^1.4.5
+  audio_session: ^0.2.4
 
 dev_dependencies:
   flutter_test:

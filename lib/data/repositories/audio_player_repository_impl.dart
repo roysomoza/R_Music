@@ -1,16 +1,21 @@
 import 'dart:async';
 import 'dart:io';
 import 'package:audio_service/audio_service.dart';
+import 'package:audio_session/audio_session.dart';
 import 'package:flutter/foundation.dart';
 import 'package:just_audio/just_audio.dart';
 import '../../core/platform/equalizer_channel.dart';
+import '../../core/platform/permission_handler_service.dart';
 import '../../domain/entities/track.dart';
 import '../../domain/repositories/i_audio_player_repository.dart';
 
 /// Concrete implementation of [IAudioPlayerRepository] integrating just_audio,
-/// just_audio_background, and system media notifications.
+/// just_audio_background, system media notifications, and full AudioSession /
+/// Audio Focus management (transient/permanent interruptions, ducking, becoming noisy).
 class AudioPlayerRepositoryImpl implements IAudioPlayerRepository {
   final AudioPlayer _player;
+  AudioSession? _audioSession;
+  late final Future<AudioSession> _sessionFuture;
 
   final StreamController<Track?> _currentTrackController =
       StreamController<Track?>.broadcast();
@@ -26,9 +31,52 @@ class AudioPlayerRepositoryImpl implements IAudioPlayerRepository {
   RepeatMode _repeatMode = RepeatMode.off;
   final List<StreamSubscription> _subscriptions = [];
 
-  AudioPlayerRepositoryImpl({AudioPlayer? player})
-      : _player = player ?? AudioPlayer() {
+  // Audio Focus & Interruption management state
+  double _userVolume = 1.0;
+  bool _isDucked = false;
+  bool _playOnResume = false;
+  bool _isInterrupted = false;
+
+  AudioPlayerRepositoryImpl({
+    AudioPlayer? player,
+    AudioSession? session,
+  }) : _player = player ?? AudioPlayer() {
+    _sessionFuture =
+        session != null ? Future.value(session) : AudioSession.instance;
     _initListeners();
+    _initAudioSession();
+  }
+
+  /// Configures AudioSession for music playback with appropriate Android/iOS audio attributes.
+  Future<void> _initAudioSession() async {
+    try {
+      final session = await _sessionFuture;
+      _audioSession = session;
+
+      await session.configure(
+        const AudioSessionConfiguration.music().copyWith(
+          androidAudioAttributes: const AndroidAudioAttributes(
+            contentType: AndroidAudioContentType.music,
+            flags: AndroidAudioFlags.none,
+            usage: AndroidAudioUsage.media,
+          ),
+          androidAudioFocusGainType: AndroidAudioFocusGainType.gain,
+          androidWillPauseWhenDucked: false,
+        ),
+      );
+
+      // Subscribe to audio focus interruptions (calls, other media apps, ducking)
+      _subscriptions.add(
+        session.interruptionEventStream.listen(_handleInterruption),
+      );
+
+      // Subscribe to headphone / Bluetooth disconnection events
+      _subscriptions.add(
+        session.becomingNoisyEventStream.listen((_) => _handleBecomingNoisy()),
+      );
+    } catch (e) {
+      debugPrint('Error configuring AudioSession: $e');
+    }
   }
 
   void _initListeners() {
@@ -63,6 +111,69 @@ class AudioPlayerRepositoryImpl implements IAudioPlayerRepository {
         }
       }),
     );
+
+    // 4. Playing state listener for AudioSession activation and user pause tracking
+    _subscriptions.add(
+      _player.playingStream.listen((playing) async {
+        if (playing) {
+          try {
+            final session = _audioSession ?? await _sessionFuture;
+            await session.setActive(true);
+          } catch (e) {
+            debugPrint('Error activating AudioSession on playing stream: $e');
+          }
+        } else if (!_isInterrupted) {
+          // If paused by user/external trigger while not interrupted, do not resume later
+          _playOnResume = false;
+        }
+      }),
+    );
+  }
+
+  /// Handles audio focus interruptions from other apps or system events.
+  Future<void> _handleInterruption(AudioInterruptionEvent event) async {
+    debugPrint('AudioInterruptionEvent: begin=${event.begin}, type=${event.type}');
+
+    if (event.type == AudioInterruptionType.duck) {
+      if (event.begin) {
+        // Transient duckable interruption (notifications, messages, WhatsApp sounds).
+        // DO NOT pause; lower volume to ~25% of current volume.
+        _isDucked = true;
+        await _player.setVolume((_userVolume * 0.25).clamp(0.0, 1.0));
+      } else {
+        // Ducking ended: restore user-configured volume immediately.
+        _isDucked = false;
+        await _player.setVolume(_userVolume.clamp(0.0, 1.0));
+      }
+    } else if (event.type == AudioInterruptionType.pause ||
+        event.type == AudioInterruptionType.unknown) {
+      if (event.begin) {
+        // Exclusive focus loss (phone calls, YouTube, Spotify, etc.)
+        _isInterrupted = true;
+        _playOnResume = _player.playing;
+        if (_playOnResume) {
+          try {
+            await _player.pause();
+          } catch (e) {
+            debugPrint('Error pausing during audio interruption: $e');
+          }
+        }
+      } else {
+        // Interruption ended: resume only if track was playing prior to interruption
+        _isInterrupted = false;
+        if (_playOnResume) {
+          _playOnResume = false;
+          await play();
+        }
+      }
+    }
+  }
+
+  /// Handles becoming noisy event (headphone / Bluetooth disconnect).
+  void _handleBecomingNoisy() {
+    debugPrint('Audio becoming noisy: headphones disconnected. Pausing playback.');
+    _playOnResume = false;
+    pause();
   }
 
   @override
@@ -138,7 +249,7 @@ class AudioPlayerRepositoryImpl implements IAudioPlayerRepository {
       );
 
       if (autoPlay) {
-        await _player.play();
+        await play();
       }
     } catch (e) {
       debugPrint('Error setting concatenating audio source: $e');
@@ -156,7 +267,7 @@ class AudioPlayerRepositoryImpl implements IAudioPlayerRepository {
             ),
           ),
         );
-        if (autoPlay) await _player.play();
+        if (autoPlay) await play();
       } catch (fallbackErr) {
         debugPrint('Fallback audio playback error: $fallbackErr');
       }
@@ -165,7 +276,17 @@ class AudioPlayerRepositoryImpl implements IAudioPlayerRepository {
 
   @override
   Future<void> play() async {
+    _playOnResume = false;
     try {
+      if (Platform.isAndroid) {
+        await PermissionHandlerService.requestNotificationPermission();
+      }
+      final session = _audioSession ?? await _sessionFuture;
+      final activated = await session.setActive(true);
+      if (!activated) {
+        debugPrint('AudioSession focus request was rejected');
+        return;
+      }
       await _player.play();
     } catch (e) {
       debugPrint('Audio play error: $e');
@@ -174,6 +295,7 @@ class AudioPlayerRepositoryImpl implements IAudioPlayerRepository {
 
   @override
   Future<void> pause() async {
+    _playOnResume = false;
     try {
       await _player.pause();
     } catch (e) {
@@ -183,8 +305,12 @@ class AudioPlayerRepositoryImpl implements IAudioPlayerRepository {
 
   @override
   Future<void> stop() async {
+    _playOnResume = false;
     try {
       await _player.stop();
+      if (_audioSession != null) {
+        await _audioSession!.setActive(false);
+      }
     } catch (e) {
       debugPrint('Audio stop error: $e');
     }
@@ -261,8 +387,13 @@ class AudioPlayerRepositoryImpl implements IAudioPlayerRepository {
 
   @override
   Future<void> setVolume(double volume) async {
+    _userVolume = volume.clamp(0.0, 1.0);
     try {
-      await _player.setVolume(volume.clamp(0.0, 1.0));
+      if (_isDucked) {
+        await _player.setVolume((_userVolume * 0.25).clamp(0.0, 1.0));
+      } else {
+        await _player.setVolume(_userVolume);
+      }
     } catch (e) {
       debugPrint('Audio setVolume error: $e');
     }
@@ -273,10 +404,41 @@ class AudioPlayerRepositoryImpl implements IAudioPlayerRepository {
     for (final sub in _subscriptions) {
       await sub.cancel();
     }
+    _subscriptions.clear();
     await _currentTrackController.close();
     await _queueController.close();
     await _currentIndexController.close();
     await _repeatModeController.close();
+    if (_audioSession != null) {
+      try {
+        await _audioSession!.setActive(false);
+      } catch (e) {
+        debugPrint('Error deactivating AudioSession: $e');
+      }
+    }
     await _player.dispose();
   }
+
+  // ══════════════════════════════════════════════════════════════════════════
+  // Visible For Testing Hooks
+  // ══════════════════════════════════════════════════════════════════════════
+
+  @visibleForTesting
+  bool get playOnResume => _playOnResume;
+
+  @visibleForTesting
+  bool get isDucked => _isDucked;
+
+  @visibleForTesting
+  bool get isInterrupted => _isInterrupted;
+
+  @visibleForTesting
+  double get userVolume => _userVolume;
+
+  @visibleForTesting
+  Future<void> handleInterruptionEvent(AudioInterruptionEvent event) =>
+      _handleInterruption(event);
+
+  @visibleForTesting
+  void handleBecomingNoisyEvent() => _handleBecomingNoisy();
 }

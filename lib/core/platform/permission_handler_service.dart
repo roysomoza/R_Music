@@ -56,4 +56,30 @@ class PermissionHandlerService {
     final manageGranted = await Permission.manageExternalStorage.isGranted;
     return manageGranted;
   }
+
+  /// Requests notification permissions for Android 13 - 16 (API 33+ / HyperOS).
+  /// Required for the foreground service notification controls in the status bar.
+  static Future<bool> requestNotificationPermission() async {
+    if (!Platform.isAndroid) return true;
+
+    try {
+      final status = await Permission.notification.status;
+      if (status.isGranted) {
+        return true;
+      }
+
+      final result = await Permission.notification.request();
+      return result.isGranted;
+    } catch (e) {
+      debugPrint('Exception while requesting notification permission: $e');
+      return false;
+    }
+  }
+
+  /// Checks whether notification permission is granted.
+  static Future<bool> hasNotificationPermission() async {
+    if (!Platform.isAndroid) return true;
+    return await Permission.notification.isGranted;
+  }
 }
+
