@@ -33,6 +33,33 @@ class MockAudioPlayer implements AudioPlayer {
   @override
   double get volume => _volume;
 
+  Duration _position = Duration.zero;
+  bool seekCalled = false;
+  Duration? lastSeekPosition;
+  final StreamController<Duration> _positionController =
+      StreamController<Duration>.broadcast();
+
+  @override
+  Duration get position => _position;
+
+  set position(Duration val) {
+    _position = val;
+    _positionController.add(val);
+  }
+
+  @override
+  Stream<Duration> get positionStream => _positionController.stream;
+
+  @override
+  Future<void> seek(Duration? position, {int? index}) async {
+    seekCalled = true;
+    lastSeekPosition = position;
+    if (position != null) {
+      _position = position;
+      _positionController.add(position);
+    }
+  }
+
   @override
   Stream<PlaybackEvent> get playbackEventStream => _playbackEventController.stream;
 
@@ -251,6 +278,30 @@ void main() {
 
       expect(repo.isInterrupted, isFalse);
       expect(repo.playOnResume, isFalse);
+      expect(mockPlayer.playCalled, isTrue);
+    });
+
+    test('Bluetooth Reconnect / Hardware Clock Reset Anchor: restores lastKnownPosition', () async {
+      // 1. Simulate playing at 2 minutes and 15 seconds
+      mockPlayer.position = const Duration(minutes: 2, seconds: 15);
+      await pumpEventQueue();
+      expect(repo.lastKnownPosition, equals(const Duration(minutes: 2, seconds: 15)));
+
+      // 2. Pause on disconnect (becoming noisy)
+      repo.handleBecomingNoisyEvent();
+      expect(mockPlayer.pauseCalled, isTrue);
+      expect(repo.lastKnownPosition, equals(const Duration(minutes: 2, seconds: 15)));
+
+      // 3. Simulate hardware reset (position drops to 00:00 during Bluetooth reconnection)
+      mockPlayer.position = Duration.zero;
+      mockPlayer.seekCalled = false;
+
+      // 4. Trigger play() on reconnect
+      await repo.play();
+
+      // 5. Verify that corrective seek restored the anchor position before playing
+      expect(mockPlayer.seekCalled, isTrue);
+      expect(mockPlayer.lastSeekPosition, equals(const Duration(minutes: 2, seconds: 15)));
       expect(mockPlayer.playCalled, isTrue);
     });
   });

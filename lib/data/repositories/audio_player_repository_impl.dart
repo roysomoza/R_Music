@@ -36,6 +36,7 @@ class AudioPlayerRepositoryImpl implements IAudioPlayerRepository {
   bool _isDucked = false;
   bool _playOnResume = false;
   bool _isInterrupted = false;
+  Duration _lastKnownPosition = Duration.zero;
 
   AudioPlayerRepositoryImpl({
     AudioPlayer? player,
@@ -142,6 +143,15 @@ class AudioPlayerRepositoryImpl implements IAudioPlayerRepository {
           }
         },
       ),
+    );
+
+    // 6. Continuous position tracking for Bluetooth reconnect anchor protection
+    _subscriptions.add(
+      _player.positionStream.listen((pos) {
+        if (pos > Duration.zero) {
+          _lastKnownPosition = pos;
+        }
+      }),
     );
   }
 
@@ -302,6 +312,17 @@ class AudioPlayerRepositoryImpl implements IAudioPlayerRepository {
         debugPrint('AudioSession focus request was rejected');
         return;
       }
+
+      // Salvaguarda / Ancla de seguridad: Si la posición actual cayó a < 300ms
+      // y se tenía una posición válida previa > 1s (típico reset de reloj Bluetooth en reconexión),
+      // forzar seek correctivo antes de disparar play().
+      final currentPos = _player.position;
+      if (_lastKnownPosition > const Duration(seconds: 1) &&
+          currentPos < const Duration(milliseconds: 300)) {
+        debugPrint('Bluetooth reconnect / hardware reset detected. Restoring position to: $_lastKnownPosition');
+        await _player.seek(_lastKnownPosition);
+      }
+
       await _player.play();
     } catch (e) {
       debugPrint('Audio play error: $e');
@@ -311,6 +332,9 @@ class AudioPlayerRepositoryImpl implements IAudioPlayerRepository {
   @override
   Future<void> pause() async {
     _playOnResume = false;
+    if (_player.position > Duration.zero) {
+      _lastKnownPosition = _player.position;
+    }
     try {
       await _player.pause();
     } catch (e) {
@@ -321,6 +345,7 @@ class AudioPlayerRepositoryImpl implements IAudioPlayerRepository {
   @override
   Future<void> stop() async {
     _playOnResume = false;
+    _lastKnownPosition = Duration.zero;
     try {
       await _player.stop();
       if (_audioSession != null) {
@@ -333,6 +358,7 @@ class AudioPlayerRepositoryImpl implements IAudioPlayerRepository {
 
   @override
   Future<void> seek(Duration position) async {
+    _lastKnownPosition = position;
     try {
       await _player.seek(position);
     } catch (e) {
@@ -456,4 +482,7 @@ class AudioPlayerRepositoryImpl implements IAudioPlayerRepository {
 
   @visibleForTesting
   void handleBecomingNoisyEvent() => _handleBecomingNoisy();
+
+  @visibleForTesting
+  Duration get lastKnownPosition => _lastKnownPosition;
 }
