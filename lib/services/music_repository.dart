@@ -16,9 +16,15 @@ class MusicRepository {
     return File(p.join(directory.path, fileName));
   }
 
-  /// Normalizes file path to ensure uniform comparisons across OS separators
+  /// Normalizes file path to ensure uniform comparisons across OS separators and Android mount aliases
   String _normalizePath(String rawPath) {
-    return p.normalize(rawPath).replaceAll('\\', '/').trim();
+    var norm = p.normalize(rawPath).replaceAll('\\', '/').trim();
+    if (norm.startsWith('/sdcard/')) {
+      norm = '/storage/emulated/0/${norm.substring(8)}';
+    } else if (norm.startsWith('/storage/self/primary/')) {
+      norm = '/storage/emulated/0/${norm.substring(22)}';
+    }
+    return norm;
   }
 
   /// Strict O(n) Deduplication Algorithm
@@ -29,7 +35,19 @@ class MusicRepository {
     final Map<String, List<TrackModel>> titleBuckets = {};
 
     for (final track in tracks) {
-      // Exclude voice notes (<30s) if duration is confirmed
+      // Exclude messaging voice notes, audio notes, and non-music files
+      final lowerPath = track.path.toLowerCase();
+      final lowerTitle = track.title.toLowerCase();
+      if (lowerPath.contains('ptt-') ||
+          lowerTitle.contains('ptt-') ||
+          lowerPath.contains('aud-2') ||
+          lowerTitle.contains('aud-2') ||
+          lowerPath.endsWith('.opus') ||
+          lowerPath.contains('cache/file_picker')) {
+        continue;
+      }
+
+      // Exclude short voice notes (<30s) if duration is confirmed
       if (track.duration > Duration.zero && track.duration.inSeconds < 30) {
         continue;
       }

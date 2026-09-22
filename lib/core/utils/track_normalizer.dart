@@ -112,7 +112,10 @@ class TrackNormalizer {
       'bluetooth',
     };
 
-    if (genericArtists.contains(alphanumeric) || alphanumeric.isEmpty) {
+    // Treat empty, generic placeholders, and pure numeric timestamps (e.g. 1782076663328) as empty/unknown
+    if (genericArtists.contains(alphanumeric) ||
+        alphanumeric.isEmpty ||
+        RegExp(r'^\d+$').hasMatch(alphanumeric)) {
       return '';
     }
     return alphanumeric;

@@ -27,6 +27,9 @@ class AudioScannerService {
     'audionote',
     'audio_note',
     'ptt-',
+    'aud-2',
+    'file_picker',
+    '.opus',
     'call_rec',
     'callrecording',
     'recordings',
@@ -401,11 +404,14 @@ class AudioScannerService {
       }
     }
 
-    // Default: use parent directory name as artist if it's not a generic folder
+    // Default: use parent directory name as artist if it's not a generic folder or numeric timestamp
     final parentDir = p.basename(p.dirname(filePath));
     String artist = 'Artista Desconocido';
     final parentLower = parentDir.toLowerCase();
-    if (!['music', 'download', 'downloads', 'audio', 'snaptube audio', 'snaptube', '0', 'emulated'].contains(parentLower)) {
+    final isGeneric = ['music', 'download', 'downloads', 'audio', 'snaptube audio', 'snaptube', '0', 'emulated', 'primary', 'sdcard'].contains(parentLower);
+    final isNumeric = RegExp(r'^\d+$').hasMatch(parentDir);
+
+    if (!isGeneric && !isNumeric) {
       artist = parentDir;
     }
 
