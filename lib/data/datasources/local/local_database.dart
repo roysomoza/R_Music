@@ -12,6 +12,7 @@ class LocalDatabase {
   static const String _tracksDbFile = 'tracks_db.json';
   static const String _foldersDbFile = 'scanned_folders.json';
   static const String _favoritesDbFile = 'favorites_db.json';
+  static const String _legacyFavoritesFile = 'favorites.json';
   static const String _customFoldersDbFile = 'custom_folders.json';
   static const String _playbackSessionFile = 'playback_state.json';
 
@@ -76,17 +77,40 @@ class LocalDatabase {
     }
   }
 
-  /// Loads favorite track IDs
+  /// Loads favorite track IDs from favorites_db.json with legacy favorites.json fallback migration
   Future<Set<String>> getFavorites() async {
     try {
       final file = await _getFile(_favoritesDbFile);
-      if (!await file.exists()) return {};
+      if (await file.exists()) {
+        final content = await file.readAsString();
+        if (content.trim().isNotEmpty) {
+          final List<dynamic> jsonList = jsonDecode(content);
+          final favSet = jsonList.map((e) => e.toString()).toSet();
+          if (favSet.isNotEmpty) {
+            return favSet;
+          }
+        }
+      }
 
-      final content = await file.readAsString();
-      if (content.trim().isEmpty) return {};
+      // Legacy migration from favorites.json if favorites_db.json is missing or empty
+      final legacyFile = await _getFile(_legacyFavoritesFile);
+      if (await legacyFile.exists()) {
+        final legacyContent = await legacyFile.readAsString();
+        if (legacyContent.trim().isNotEmpty) {
+          final List<dynamic> legacyList = jsonDecode(legacyContent);
+          final Set<String> migrated = legacyList.map((item) {
+            final raw = item.toString();
+            return raw.hashCode.toString();
+          }).toSet();
 
-      final List<dynamic> jsonList = jsonDecode(content);
-      return jsonList.map((e) => e.toString()).toSet();
+          if (migrated.isNotEmpty) {
+            await saveFavorites(migrated);
+            return migrated;
+          }
+        }
+      }
+
+      return {};
     } catch (e) {
       debugPrint('Error reading favorites: $e');
       return {};

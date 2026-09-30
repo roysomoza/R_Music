@@ -32,11 +32,15 @@ abstract class IAudioPlayerRepository {
   /// Index of currently playing track in queue
   Stream<int> get currentIndexStream;
 
+  /// Stream of playback error messages (e.g. corrupt, unreadable or missing audio files)
+  Stream<String> get playbackErrorStream;
+
   /// Sets queue and plays track at [initialIndex]
   Future<void> setQueue(
     List<Track> queue, {
     int initialIndex = 0,
     bool autoPlay = true,
+    bool preload = true,
   });
 
   /// Resumes playback

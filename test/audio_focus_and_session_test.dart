@@ -3,6 +3,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:audio_session/audio_session.dart';
 import 'package:just_audio/just_audio.dart';
 import 'package:pure_audio/data/repositories/audio_player_repository_impl.dart';
+import 'package:pure_audio/domain/entities/track.dart';
 
 class MockAudioPlayer implements AudioPlayer {
   bool _playing = false;
@@ -97,6 +98,26 @@ class MockAudioPlayer implements AudioPlayer {
     _playingController.add(false);
   }
 
+  bool seekToNextCalled = false;
+  bool _hasNext = true;
+
+  @override
+  bool get hasNext => _hasNext;
+  set hasNext(bool val) => _hasNext = val;
+
+  @override
+  Future<void> seekToNext() async {
+    seekToNextCalled = true;
+  }
+
+  void emitPlaybackError(Object error) {
+    _playbackEventController.addError(error);
+  }
+
+  void emitPlayerState(PlayerState state) {
+    _playerStateController.add(state);
+  }
+
   @override
   Future<void> setVolume(double volume) async {
     _volume = volume;
@@ -108,6 +129,7 @@ class MockAudioPlayer implements AudioPlayer {
     await _playerStateController.close();
     await _androidAudioSessionIdController.close();
     await _playingController.close();
+    await _playbackEventController.close();
   }
 
   @override
@@ -303,6 +325,101 @@ void main() {
       expect(mockPlayer.seekCalled, isTrue);
       expect(mockPlayer.lastSeekPosition, equals(const Duration(minutes: 2, seconds: 15)));
       expect(mockPlayer.playCalled, isTrue);
+    });
+
+    group('Playback Error & Infinite Loop Circuit Breaker Tests', () {
+      test('Single track error halts playback, calls pause, and emits error notification', () async {
+        final track = Track(
+          id: '1',
+          path: '/music/broken.mp3',
+          title: 'Broken Track',
+          artist: 'Artist',
+          duration: const Duration(seconds: 120),
+          dateAdded: DateTime.now(),
+        );
+
+        await repo.setQueue([track], autoPlay: false, preload: false);
+
+        String? errorMessage;
+        final sub = repo.playbackErrorStream.listen((msg) {
+          errorMessage = msg;
+        });
+
+        mockPlayer.emitPlaybackError(Exception('File unreadable'));
+        await pumpEventQueue();
+
+        expect(mockPlayer.pauseCalled, isTrue);
+        expect(mockPlayer.seekToNextCalled, isFalse);
+        expect(repo.consecutiveErrorCount, equals(0));
+        expect(errorMessage, contains('Broken Track'));
+        expect(errorMessage, contains('archivo no encontrado o dañado'));
+
+        await sub.cancel();
+      });
+
+      test('Multiple tracks: skips on individual error but circuit breaker trips to avoid infinite loop', () async {
+        final tracks = [
+          Track(id: '1', path: '/music/t1.mp3', title: 'Track 1', artist: 'A', duration: const Duration(seconds: 100), dateAdded: DateTime.now()),
+          Track(id: '2', path: '/music/t2.mp3', title: 'Track 2', artist: 'A', duration: const Duration(seconds: 100), dateAdded: DateTime.now()),
+          Track(id: '3', path: '/music/t3.mp3', title: 'Track 3', artist: 'A', duration: const Duration(seconds: 100), dateAdded: DateTime.now()),
+        ];
+
+        await repo.setQueue(tracks, autoPlay: false, preload: false);
+
+        final errors = <String>[];
+        final sub = repo.playbackErrorStream.listen((msg) {
+          errors.add(msg);
+        });
+
+        // 1st error -> attempts to skip
+        mockPlayer.seekToNextCalled = false;
+        mockPlayer.pauseCalled = false;
+        mockPlayer.emitPlaybackError(Exception('Corrupt 1'));
+        await pumpEventQueue();
+        expect(mockPlayer.seekToNextCalled, isTrue);
+        expect(mockPlayer.pauseCalled, isFalse);
+        expect(repo.consecutiveErrorCount, equals(1));
+        expect(errors.last, contains('Track 1'));
+
+        // 2nd error -> attempts to skip
+        mockPlayer.seekToNextCalled = false;
+        mockPlayer.emitPlaybackError(Exception('Corrupt 2'));
+        await pumpEventQueue();
+        expect(mockPlayer.seekToNextCalled, isTrue);
+        expect(mockPlayer.pauseCalled, isFalse);
+        expect(repo.consecutiveErrorCount, equals(2));
+
+        // 3rd error -> circuit breaker trips! (consecutive errors >= queue.length)
+        mockPlayer.seekToNextCalled = false;
+        mockPlayer.pauseCalled = false;
+        mockPlayer.emitPlaybackError(Exception('Corrupt 3'));
+        await pumpEventQueue();
+        expect(mockPlayer.pauseCalled, isTrue);
+        expect(mockPlayer.seekToNextCalled, isFalse, reason: 'Circuit breaker must prevent further skips');
+        expect(repo.consecutiveErrorCount, equals(0));
+        expect(errors.last, contains('No se pudieron reproducir las canciones seleccionadas'));
+
+        await sub.cancel();
+      });
+
+      test('Successful playback resets consecutive error count', () async {
+        final tracks = [
+          Track(id: '1', path: '/music/t1.mp3', title: 'Track 1', artist: 'A', duration: const Duration(seconds: 100), dateAdded: DateTime.now()),
+          Track(id: '2', path: '/music/t2.mp3', title: 'Track 2', artist: 'A', duration: const Duration(seconds: 100), dateAdded: DateTime.now()),
+        ];
+
+        await repo.setQueue(tracks, autoPlay: false, preload: false);
+
+        // 1st error increments count
+        mockPlayer.emitPlaybackError(Exception('Temporary glitch'));
+        await pumpEventQueue();
+        expect(repo.consecutiveErrorCount, equals(1));
+
+        // Successful playback resets count to 0
+        mockPlayer.emitPlayerState(PlayerState(true, ProcessingState.ready));
+        await pumpEventQueue();
+        expect(repo.consecutiveErrorCount, equals(0));
+      });
     });
   });
 }

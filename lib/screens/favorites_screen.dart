@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../core/utils/track_normalizer.dart';
 import '../models/folder_model.dart';
 import '../models/track_model.dart';
 import '../theme/app_theme.dart';
@@ -45,10 +46,9 @@ class _FavoritesScreenState extends State<FavoritesScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final filteredFavorites = widget.favoriteTracks.where((track) {
-      final q = _searchQuery.toLowerCase();
-      return track.title.toLowerCase().contains(q) || track.artist.toLowerCase().contains(q);
-    }).toList();
+    final filteredFavorites = _searchQuery.isEmpty
+        ? widget.favoriteTracks
+        : widget.favoriteTracks.where((track) => TrackNormalizer.matchesSearch(track, _searchQuery)).toList();
 
     return Scaffold(
       backgroundColor: AppTheme.background,
@@ -241,12 +241,13 @@ class _FavoritesScreenState extends State<FavoritesScreen> {
                           final playIndex = originalIndex != -1 ? originalIndex : index;
 
                           return TrackTile(
+                            key: ValueKey(track.id),
                             track: track,
                             isPlaying: isPlaying,
                             isFavorite: true,
                             index: index + 1,
                             onTap: () => widget.onPlayTrack(widget.favoriteTracks, playIndex),
-                            onToggleFavorite: () => widget.onToggleFavorite(track.path),
+                            onToggleFavorite: () => widget.onToggleFavorite(track.id),
                             onLongPress: () {
                               TrackOptionsSheet.show(
                                 context: context,
@@ -254,7 +255,7 @@ class _FavoritesScreenState extends State<FavoritesScreen> {
                                 isFavorite: true,
                                 folders: widget.folders,
                                 onPlayNow: () => widget.onPlayTrack(widget.favoriteTracks, playIndex),
-                                onToggleFavorite: () => widget.onToggleFavorite(track.path),
+                                onToggleFavorite: () => widget.onToggleFavorite(track.id),
                                 onAddToFolder: (f) => widget.onAddToFolder(f, track),
                                 onCreateAndAddToFolder: (name) => widget.onCreateAndAddToFolder(name, track),
                                 onDeleteTrack: (deletePhysical) => widget.onDeleteTrack(track, deletePhysical),

@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 import 'package:flutter/foundation.dart';
@@ -7,24 +8,67 @@ import '../core/utils/track_normalizer.dart';
 import '../models/folder_model.dart';
 import '../models/track_model.dart';
 import 'audio_scanner_service.dart';
+import 'metadata_resolution_service.dart';
 
 class MusicRepository {
   final AudioScannerService _scannerService = AudioScannerService();
+  final MetadataResolutionService _resolutionService = MetadataResolutionService();
+
+  final StreamController<List<TrackModel>> _tracksUpdatedController =
+      StreamController<List<TrackModel>>.broadcast();
+  final StreamController<Set<String>> _favoritesUpdatedController =
+      StreamController<Set<String>>.broadcast();
+
+  Set<String> _cachedFavorites = {};
+  bool _favoritesLoaded = false;
+
+  static final RegExp _cacheFilePickerPattern = RegExp(r'/cache/file_picker/\d{8,}/');
+
+  /// Reactive stream emitted when background metadata batch resolution updates tracks
+  Stream<List<TrackModel>> get onTracksUpdated => _tracksUpdatedController.stream;
+
+  /// Reactive stream emitted when favorites are loaded, toggled, or modified
+  Stream<Set<String>> get onFavoritesUpdated => _favoritesUpdatedController.stream;
+
+  /// Synchronous snapshot of current favorites in memory
+  Set<String> get currentFavorites => Set.unmodifiable(_cachedFavorites);
+
+  MetadataResolutionService get resolutionService => _resolutionService;
 
   Future<File> _getFile(String fileName) async {
     final directory = await getApplicationDocumentsDirectory();
     return File(p.join(directory.path, fileName));
   }
 
+  /// Writes file contents atomically via a temporary file replacement.
+  /// Prevents zero-byte corruption or half-written files if app is killed mid-write.
+  Future<void> _writeAtomic(String fileName, String content) async {
+    final file = await _getFile(fileName);
+    final tempFile = File('${file.path}.tmp');
+    await tempFile.writeAsString(content, flush: true);
+    if (await tempFile.exists()) {
+      try {
+        await tempFile.rename(file.path);
+      } catch (e) {
+        // Fallback en caso de error de sistema de archivos: copiar contenido y eliminar el archivo .tmp
+        try {
+          await tempFile.copy(file.path);
+          await tempFile.delete();
+        } catch (fallbackError) {
+          debugPrint("Fallback copy/delete failed for $fileName: $fallbackError");
+        }
+      }
+    }
+  }
+
+  /// Top-level or static worker to encode large track lists off the main UI isolate
+  static String _encodeTracksJsonWorker(List<Map<String, dynamic>> list) {
+    return jsonEncode(list);
+  }
+
   /// Normalizes file path to ensure uniform comparisons across OS separators and Android mount aliases
   String _normalizePath(String rawPath) {
-    var norm = p.normalize(rawPath).replaceAll('\\', '/').trim();
-    if (norm.startsWith('/sdcard/')) {
-      norm = '/storage/emulated/0/${norm.substring(8)}';
-    } else if (norm.startsWith('/storage/self/primary/')) {
-      norm = '/storage/emulated/0/${norm.substring(22)}';
-    }
-    return norm;
+    return TrackNormalizer.canonicalizePath(rawPath);
   }
 
   /// Strict O(n) Deduplication Algorithm
@@ -146,23 +190,18 @@ class MusicRepository {
           // Deduplicate immediately upon loading
           final deduplicated = deduplicateTracks(tracks);
 
-          final List<TrackModel> validTracks = [];
-          for (var t in deduplicated) {
-            final f = File(t.path);
-            if (await f.exists()) {
-              validTracks.add(t);
-            } else {
-              // Keep in cache in case permissions or mount point is pending
-              validTracks.add(t);
+          if (deduplicated.isNotEmpty) {
+            // If deduplication removed duplicates, persist the clean state asynchronously
+            if (deduplicated.length != tracks.length) {
+              saveTracks(deduplicated);
             }
-          }
 
-          if (validTracks.isNotEmpty) {
-            // If deduplication removed duplicates, persist the clean state
-            if (validTracks.length != tracks.length) {
-              await saveTracks(validTracks);
-            }
-            return validTracks;
+            // Post-startup deferred batch resolution: keeps initial frame render at 60 FPS
+            Future.delayed(const Duration(milliseconds: 500), () {
+              autoResolveUnresolvedTracks(deduplicated);
+            });
+
+            return deduplicated;
           }
         }
       }
@@ -209,13 +248,58 @@ class MusicRepository {
     return [];
   }
 
-  /// Saves tracks to tracks_db.json ensuring strict deduplication
+  /// Asynchronously evaluates tracks in the background, resolving numeric/unknown artists
+  /// in a single Isolate worker and persisting in a single atomic transaction.
+  Future<List<TrackModel>> autoResolveUnresolvedTracks(List<TrackModel> tracks) async {
+    final needsWork = tracks.any((t) =>
+        TrackNormalizer.isInvalidOrGenericArtist(t.artist) ||
+        TrackNormalizer.isNonMusic(t.path, t.title) ||
+        _cacheFilePickerPattern.hasMatch(t.path));
+
+    if (!needsWork) {
+      return tracks;
+    }
+
+    try {
+      final resolved = await _resolutionService.resolveBatch(tracks);
+      final deduplicated = deduplicateTracks(resolved);
+
+      bool changed = deduplicated.length != tracks.length;
+      if (!changed) {
+        for (int i = 0; i < tracks.length; i++) {
+          if (tracks[i].artist != deduplicated[i].artist ||
+              tracks[i].title != deduplicated[i].title) {
+            changed = true;
+            break;
+          }
+        }
+      }
+
+      if (changed) {
+        await saveTracks(deduplicated);
+        _tracksUpdatedController.add(deduplicated);
+        return deduplicated;
+      }
+    } catch (e) {
+      debugPrint("Background auto-resolution error: $e");
+    }
+    return tracks;
+  }
+
+  /// Saves tracks to tracks_db.json ensuring strict deduplication and atomic persistence
   Future<void> saveTracks(List<TrackModel> tracks) async {
     try {
       final uniqueTracks = deduplicateTracks(tracks);
-      final file = await _getFile('tracks_db.json');
       final jsonList = uniqueTracks.map((t) => t.toJson()).toList();
-      await file.writeAsString(jsonEncode(jsonList));
+
+      final String jsonContent;
+      if (uniqueTracks.length > 300) {
+        jsonContent = await compute(_encodeTracksJsonWorker, jsonList);
+      } else {
+        jsonContent = jsonEncode(jsonList);
+      }
+
+      await _writeAtomic('tracks_db.json', jsonContent);
     } catch (e) {
       debugPrint("Error saving tracks: $e");
     }
@@ -234,8 +318,10 @@ class MusicRepository {
     }
 
     final merged = deduplicateTracks(map.values.toList());
-    await saveTracks(merged);
-    return merged;
+    final resolved = await _resolutionService.resolveBatch(merged);
+    final cleanResolved = deduplicateTracks(resolved);
+    await saveTracks(cleanResolved);
+    return cleanResolved;
   }
 
   /// Scans device and non-destructively merges with existing records
@@ -258,7 +344,10 @@ class MusicRepository {
     final merged = deduplicateTracks(map.values.toList());
 
     if (merged.isNotEmpty) {
-      await saveTracks(merged);
+      final resolved = await _resolutionService.resolveBatch(merged);
+      final cleanResolved = deduplicateTracks(resolved);
+      await saveTracks(cleanResolved);
+      return cleanResolved;
     }
 
     return merged;
@@ -333,9 +422,8 @@ class MusicRepository {
   /// Saves custom user folders to folders.json
   Future<void> saveFolders(List<FolderModel> folders) async {
     try {
-      final file = await _getFile('folders.json');
       final jsonList = folders.map((f) => f.toJson()).toList();
-      await file.writeAsString(jsonEncode(jsonList));
+      await _writeAtomic('folders.json', jsonEncode(jsonList));
     } catch (e) {
       debugPrint("Error saving folders: $e");
     }
@@ -412,30 +500,62 @@ class MusicRepository {
   // FAVORITES & PLAYBACK STATE
   // ══════════════════════════════════════════════════════════════════════════
 
-  /// Loads favorites (Set of file paths)
+  /// Loads favorites (Set of file paths) and emits to onFavoritesUpdated
   Future<Set<String>> loadFavorites() async {
     try {
       final file = await _getFile('favorites.json');
       if (await file.exists()) {
         final content = await file.readAsString();
-        final List<dynamic> jsonList = jsonDecode(content);
-        return jsonList.map((item) => _normalizePath(item.toString())).toSet();
+        if (content.trim().isNotEmpty) {
+          final List<dynamic> jsonList = jsonDecode(content);
+          _cachedFavorites = jsonList.map((item) => _normalizePath(item.toString())).toSet();
+          _favoritesLoaded = true;
+          _favoritesUpdatedController.add(Set.unmodifiable(_cachedFavorites));
+          return Set.from(_cachedFavorites);
+        }
       }
     } catch (e) {
       debugPrint("Error loading favorites: $e");
     }
+    _cachedFavorites = {};
+    _favoritesLoaded = true;
+    _favoritesUpdatedController.add(Set.unmodifiable(_cachedFavorites));
     return {};
   }
 
-  /// Saves favorites (Set of file paths)
+  /// Saves favorites (Set of file paths) atomically and notifies all reactive subscribers
   Future<void> saveFavorites(Set<String> favorites) async {
     try {
-      final file = await _getFile('favorites.json');
-      final normList = favorites.map(_normalizePath).toSet().toList();
-      await file.writeAsString(jsonEncode(normList));
+      final normSet = favorites.map(_normalizePath).toSet();
+      _cachedFavorites = normSet;
+      _favoritesLoaded = true;
+      final normList = normSet.toList();
+      await _writeAtomic('favorites.json', jsonEncode(normList));
+      _favoritesUpdatedController.add(Set.unmodifiable(_cachedFavorites));
     } catch (e) {
       debugPrint("Error saving favorites: $e");
     }
+  }
+
+  /// Toggles favorite status for a track path atomically and broadcasts to all listeners
+  Future<Set<String>> toggleFavorite(String trackPath) async {
+    if (!_favoritesLoaded) {
+      await loadFavorites();
+    }
+    final norm = _normalizePath(trackPath);
+    final updated = Set<String>.from(_cachedFavorites);
+    if (updated.contains(norm)) {
+      updated.remove(norm);
+    } else {
+      updated.add(norm);
+    }
+    await saveFavorites(updated);
+    return updated;
+  }
+
+  /// Checks whether a track path is in favorites synchronously against memory cache
+  bool isFavoriteSync(String trackPath) {
+    return _cachedFavorites.contains(_normalizePath(trackPath));
   }
 
   /// Loads last playback state
@@ -455,14 +575,19 @@ class MusicRepository {
   /// Saves playback state
   Future<void> savePlaybackState(List<String> playlistPaths, int currentIndex) async {
     try {
-      final file = await _getFile('playback_state.json');
       final data = {
         'playlist': playlistPaths.map(_normalizePath).toList(),
         'currentIndex': currentIndex,
       };
-      await file.writeAsString(jsonEncode(data));
+      await _writeAtomic('playback_state.json', jsonEncode(data));
     } catch (e) {
       debugPrint("Error saving playback state: $e");
     }
+  }
+
+  /// Releases stream controllers
+  void dispose() {
+    _tracksUpdatedController.close();
+    _favoritesUpdatedController.close();
   }
 }

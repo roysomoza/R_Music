@@ -93,7 +93,7 @@ class PlayerState {
       identical(this, other) ||
       other is PlayerState &&
           runtimeType == other.runtimeType &&
-          currentTrack?.id == other.currentTrack?.id &&
+          currentTrack == other.currentTrack &&
           status == other.status &&
           position == other.position &&
           duration == other.duration &&
@@ -106,7 +106,7 @@ class PlayerState {
 
   @override
   int get hashCode =>
-      (currentTrack?.id.hashCode ?? 0) ^
+      currentTrack.hashCode ^
       status.hashCode ^
       position.hashCode ^
       duration.hashCode ^

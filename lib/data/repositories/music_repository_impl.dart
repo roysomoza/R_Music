@@ -14,12 +14,17 @@ import '../datasources/device/id3_reader_datasource.dart';
 import '../datasources/device/isolates/scanner_worker.dart';
 import '../datasources/local/local_database.dart';
 import '../models/track_dto.dart';
+import '../../models/track_model.dart';
+import '../../services/metadata_resolution_service.dart';
+import '../../services/music_repository.dart';
 
 /// Concrete implementation of [IMusicRepository] following the Offline-First
 /// Repository pattern with reactive streams as the Single Source of Truth.
 class MusicRepositoryImpl implements IMusicRepository {
   final LocalDatabase _localDb;
   final Id3ReaderDatasource _id3Reader;
+  final MetadataResolutionService _resolutionService = MetadataResolutionService();
+  final MusicRepository _musicService;
 
   final StreamController<List<Track>> _tracksController =
       StreamController<List<Track>>.broadcast();
@@ -32,6 +37,7 @@ class MusicRepositoryImpl implements IMusicRepository {
   final StreamController<Set<String>> _favoritesController =
       StreamController<Set<String>>.broadcast();
 
+  final List<StreamSubscription> _subscriptions = [];
   List<Track> _cachedTracks = [];
   Set<String> _cachedFavorites = {};
   List<Folder> _cachedFolders = [];
@@ -41,8 +47,37 @@ class MusicRepositoryImpl implements IMusicRepository {
   MusicRepositoryImpl({
     LocalDatabase? localDb,
     Id3ReaderDatasource? id3Reader,
+    MusicRepository? musicService,
   })  : _localDb = localDb ?? LocalDatabase(),
-        _id3Reader = id3Reader ?? Id3ReaderDatasource();
+        _id3Reader = id3Reader ?? Id3ReaderDatasource(),
+        _musicService = musicService ?? MusicRepository() {
+    _initFavoritesBridge();
+  }
+
+  void _initFavoritesBridge() {
+    _subscriptions.add(
+      _musicService.onFavoritesUpdated.listen((favs) {
+        for (final item in favs) {
+          final id = item.hashCode.toString();
+          _cachedFavorites.add(id);
+        }
+        _localDb.saveFavorites(_cachedFavorites);
+        _favoritesController.add(Set.unmodifiable(_cachedFavorites));
+        _cachedTracks = _cachedTracks.map((t) {
+          final isFav = _isFavoriteInternal(t);
+          return t.copyWith(isFavorite: isFav);
+        }).toList();
+        _emitDerivedEntities();
+      }),
+    );
+  }
+
+  bool _isFavoriteInternal(Track t) {
+    return _cachedFavorites.contains(t.id) ||
+        _cachedFavorites.contains(t.path) ||
+        _cachedFavorites.contains(TrackNormalizer.canonicalizePath(t.path)) ||
+        _cachedFavorites.contains(t.path.hashCode.toString());
+  }
 
   /// Synchronous snapshots for immediate UI access
   List<Track> get currentTracks => List.unmodifiable(_cachedTracks);
@@ -68,9 +103,9 @@ class MusicRepositoryImpl implements IMusicRepository {
   Future<void> initialize() async {
     if (_isInitialized) return;
 
-    // 1. Load favorites
+    // 1. Load favorites via SSOT LocalDatabase (favorites_db.json)
     _cachedFavorites = await _localDb.getFavorites();
-    _favoritesController.add(Set.from(_cachedFavorites));
+    _favoritesController.add(Set.unmodifiable(_cachedFavorites));
 
     // 2. Load custom folders
     _customFolderPaths = await _localDb.getCustomFolders();
@@ -80,7 +115,7 @@ class MusicRepositoryImpl implements IMusicRepository {
     if (dtos.isNotEmpty) {
       final rawList = dtos.map((d) {
         final domain = d.toDomain();
-        return domain.copyWith(isFavorite: _cachedFavorites.contains(domain.id));
+        return domain.copyWith(isFavorite: _isFavoriteInternal(domain));
       }).toList();
 
       _cachedTracks = _deduplicateTracks(rawList);
@@ -88,6 +123,27 @@ class MusicRepositoryImpl implements IMusicRepository {
         await _localDb.saveTracks(_cachedTracks.map((t) => TrackDto.fromDomain(t)).toList());
       }
       _emitDerivedEntities();
+
+      // Post-startup deferred background resolution: preserves 60 FPS
+      Future.delayed(const Duration(milliseconds: 600), () async {
+        final resolved = await _resolveTrackArtists(_cachedTracks);
+        final clean = _deduplicateTracks(resolved);
+        bool changed = clean.length != _cachedTracks.length;
+        if (!changed) {
+          for (int i = 0; i < clean.length; i++) {
+            if (clean[i].artist != _cachedTracks[i].artist || clean[i].title != _cachedTracks[i].title) {
+              changed = true;
+              break;
+            }
+          }
+        }
+        if (changed) {
+          _cachedTracks = clean;
+          await _localDb.saveTracks(_cachedTracks.map((t) => TrackDto.fromDomain(t)).toList());
+          _tracksController.add(List.unmodifiable(_cachedTracks));
+          _emitDerivedEntities();
+        }
+      });
     }
 
     _isInitialized = true;
@@ -185,8 +241,11 @@ class MusicRepositoryImpl implements IMusicRepository {
       scannedTracks.addAll(enrichedMap.values);
     }
 
+    // Cascading metadata resolution before deduplication
+    final resolvedTracks = await _resolveTrackArtists(scannedTracks);
+
     // Strict O(n) deduplication with TrackNormalizer
-    _cachedTracks = _deduplicateTracks(scannedTracks);
+    _cachedTracks = _deduplicateTracks(resolvedTracks);
 
     // 6. Save to local database (SSOT)
     final dtosToPersist = _cachedTracks.map((t) => TrackDto.fromDomain(t)).toList();
@@ -199,6 +258,39 @@ class MusicRepositoryImpl implements IMusicRepository {
     debugPrint('[DMAIC Six Sigma] Scan, filter and deduplication completed in: ${stopwatch.elapsedMilliseconds}ms. Total indexed: ${_cachedTracks.length}');
 
     return _cachedTracks;
+  }
+
+  /// Helper to batch-resolve track artists through the cascading service off the main thread.
+  Future<List<Track>> _resolveTrackArtists(List<Track> tracks) async {
+    try {
+      final models = tracks.map<TrackModel>((t) => TrackModel(
+        id: t.id,
+        path: t.path,
+        title: t.title,
+        artist: t.artist,
+        album: t.album,
+        duration: t.duration,
+        dateAdded: t.dateAdded,
+        fileSize: t.fileSize,
+      )).toList();
+
+      final resolvedModels = await _resolutionService.resolveBatch(models);
+      final modelMap = {for (var m in resolvedModels) m.path: m};
+
+      return tracks.map((t) {
+        final m = modelMap[t.path];
+        if (m != null && (m.artist != t.artist || m.title != t.title)) {
+          return t.copyWith(
+            title: m.title,
+            artist: m.artist,
+          );
+        }
+        return t;
+      }).toList();
+    } catch (e) {
+      debugPrint("Error resolving track artists in repository impl: $e");
+      return tracks;
+    }
   }
 
   /// Strict O(n) Deduplication Algorithm
@@ -285,35 +377,59 @@ class MusicRepositoryImpl implements IMusicRepository {
   }
 
   @override
-  Future<void> toggleFavorite(String trackId) async {
-    if (_cachedFavorites.contains(trackId)) {
-      _cachedFavorites.remove(trackId);
+  Future<void> toggleFavorite(String trackIdOrPath) async {
+    String targetId = trackIdOrPath;
+    String? targetPath;
+    for (final t in _cachedTracks) {
+      if (t.id == trackIdOrPath || t.path == trackIdOrPath) {
+        targetId = t.id;
+        targetPath = t.path;
+        break;
+      }
+    }
+    if (targetId == trackIdOrPath && (trackIdOrPath.contains('/') || trackIdOrPath.contains('\\'))) {
+      targetId = TrackNormalizer.canonicalizePath(trackIdOrPath).hashCode.toString();
+      targetPath = trackIdOrPath;
+    }
+
+    if (_cachedFavorites.contains(targetId)) {
+      _cachedFavorites.remove(targetId);
+      if (targetPath != null) {
+        _cachedFavorites.remove(targetPath);
+        _cachedFavorites.remove(TrackNormalizer.canonicalizePath(targetPath));
+      }
+      _cachedFavorites.remove(trackIdOrPath);
     } else {
-      _cachedFavorites.add(trackId);
+      _cachedFavorites.add(targetId);
     }
 
     await _localDb.saveFavorites(_cachedFavorites);
-    _favoritesController.add(Set.from(_cachedFavorites));
+    _favoritesController.add(Set.unmodifiable(_cachedFavorites));
 
-    // Update in cached tracks
     _cachedTracks = _cachedTracks.map((t) {
-      if (t.id == trackId) {
-        return t.copyWith(isFavorite: _cachedFavorites.contains(trackId));
-      }
-      return t;
+      final isFav = _isFavoriteInternal(t);
+      return t.copyWith(isFavorite: isFav);
     }).toList();
-
     _emitDerivedEntities();
   }
 
   @override
-  Future<bool> isFavorite(String trackId) async {
-    return _cachedFavorites.contains(trackId);
+  Future<bool> isFavorite(String trackIdOrPath) async {
+    if (_cachedFavorites.contains(trackIdOrPath)) return true;
+    for (final t in _cachedTracks) {
+      if (t.path == trackIdOrPath && _cachedFavorites.contains(t.id)) return true;
+      if (t.id == trackIdOrPath && _cachedFavorites.contains(t.path)) return true;
+    }
+    final hashId = TrackNormalizer.canonicalizePath(trackIdOrPath).hashCode.toString();
+    return _cachedFavorites.contains(hashId);
   }
 
   @override
   Future<Set<String>> getFavorites() async {
-    return Set.from(_cachedFavorites);
+    if (!_isInitialized || _cachedFavorites.isEmpty) {
+      _cachedFavorites = await _localDb.getFavorites();
+    }
+    return Set.unmodifiable(_cachedFavorites);
   }
 
   @override
@@ -351,6 +467,9 @@ class MusicRepositoryImpl implements IMusicRepository {
 
   @override
   Future<void> dispose() async {
+    for (final sub in _subscriptions) {
+      await sub.cancel();
+    }
     await _tracksController.close();
     await _albumsController.close();
     await _artistsController.close();

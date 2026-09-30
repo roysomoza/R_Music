@@ -52,8 +52,11 @@ class PlayerStore {
     _subscriptions.add(
       _playerRepo.currentTrackStream.listen((track) {
         if (track != null) {
+          final isFav = (state.currentTrack?.id == track.id || state.currentTrack?.path == track.path)
+              ? state.currentTrack!.isFavorite
+              : track.isFavorite;
           _emit(state.copyWith(
-            currentTrack: track,
+            currentTrack: track.copyWith(isFavorite: isFav),
             status: state.isPlaying ? PlaybackStatus.playing : state.status,
           ));
         }
@@ -112,12 +115,19 @@ class PlayerStore {
       }),
     );
 
+    _subscriptions.add(
+      _playerRepo.playbackErrorStream.listen((errorMessage) {
+        _emitEffect(ShowErrorEffect(errorMessage));
+      }),
+    );
+
     // Synchronize favorites if music repo is supplied
     if (_musicRepo != null) {
       _subscriptions.add(
         _musicRepo.favoritesStream.listen((favorites) {
           if (state.currentTrack != null) {
-            final isFav = favorites.contains(state.currentTrack!.id);
+            final isFav = favorites.contains(state.currentTrack!.path) ||
+                favorites.contains(state.currentTrack!.id);
             if (isFav != state.currentTrack!.isFavorite) {
               _emit(state.copyWith(
                 currentTrack: state.currentTrack!.copyWith(isFavorite: isFav),
@@ -160,6 +170,30 @@ class PlayerStore {
         ));
 
         await _playerRepo.setQueue(queue, initialIndex: clampedIndex, autoPlay: true);
+        break;
+
+      case RestorePlaybackIntent(:final queue, :final initialIndex, :final position):
+        if (queue.isEmpty) return;
+        final clampedIndex = initialIndex.clamp(0, queue.length - 1);
+        final initialTrack = queue[clampedIndex];
+
+        _emit(state.copyWith(
+          currentTrack: initialTrack,
+          queue: queue,
+          currentIndex: clampedIndex,
+          position: position ?? Duration.zero,
+          status: PlaybackStatus.paused,
+        ));
+
+        await _playerRepo.setQueue(
+          queue,
+          initialIndex: clampedIndex,
+          autoPlay: false,
+          preload: false,
+        );
+        if (position != null && position > Duration.zero) {
+          await _playerRepo.seek(position);
+        }
         break;
 
       case PlayPauseIntent():
@@ -247,7 +281,14 @@ class PlayerStore {
 
       case ToggleFavoriteCurrentIntent():
         if (state.currentTrack != null && _musicRepo != null) {
-          await _musicRepo.toggleFavorite(state.currentTrack!.id);
+          final newIsFav = !state.currentTrack!.isFavorite;
+          _emit(state.copyWith(
+            currentTrack: state.currentTrack!.copyWith(isFavorite: newIsFav),
+          ));
+          final target = state.currentTrack!.id.isNotEmpty
+              ? state.currentTrack!.id
+              : state.currentTrack!.path;
+          await _musicRepo.toggleFavorite(target);
         }
         break;
     }

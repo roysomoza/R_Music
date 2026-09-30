@@ -2,6 +2,7 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:just_audio/just_audio.dart';
 import '../core/theme/app_theme.dart';
+import '../domain/entities/track.dart';
 import '../models/track_model.dart';
 import '../presentation/mvi/player/player_intent.dart';
 import '../presentation/mvi/player/player_state.dart' as mvi;
@@ -50,7 +51,20 @@ class PlayerDock extends StatelessWidget {
       return ValueListenableBuilder<mvi.PlayerState>(
         valueListenable: store!.stateListenable,
         builder: (context, state, _) {
-          final track = state.currentTrack;
+          final track = state.currentTrack ??
+              (currentTrack != null
+                  ? Track(
+                      id: currentTrack!.id,
+                      path: currentTrack!.path,
+                      title: currentTrack!.title,
+                      artist: currentTrack!.artist,
+                      album: currentTrack!.album,
+                      duration: currentTrack!.duration,
+                      dateAdded: currentTrack!.dateAdded,
+                      fileSize: currentTrack!.fileSize,
+                      isFavorite: isFavorite,
+                    )
+                  : null);
           if (track == null) return const SizedBox.shrink();
 
           return _buildContainer(
@@ -59,7 +73,7 @@ class PlayerDock extends StatelessWidget {
             artist: track.artist,
             artworkPath: track.artworkPath,
             position: state.position,
-            duration: state.duration,
+            duration: state.duration > Duration.zero ? state.duration : track.duration,
             isPlaying: state.isPlaying,
             isBuffering: state.isBuffering,
             isShuffle: state.isShuffle,

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../core/utils/track_normalizer.dart';
 import '../models/folder_model.dart';
 import '../models/track_model.dart';
 import '../theme/app_theme.dart';
@@ -46,11 +47,41 @@ class FolderDetailScreen extends StatefulWidget {
 class _FolderDetailScreenState extends State<FolderDetailScreen> {
   final TextEditingController _searchController = TextEditingController();
   String _searchQuery = '';
+  late Set<String> _localFavorites;
+
+  @override
+  void initState() {
+    super.initState();
+    _localFavorites = Set<String>.from(widget.favorites);
+  }
+
+  @override
+  void didUpdateWidget(covariant FolderDetailScreen oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.favorites != widget.favorites) {
+      _localFavorites = Set<String>.from(widget.favorites);
+    }
+  }
 
   @override
   void dispose() {
     _searchController.dispose();
     super.dispose();
+  }
+
+  void _handleToggleFavorite(TrackModel track) {
+    setState(() {
+      final hasFav = _localFavorites.contains(track.id) ||
+          _localFavorites.contains(track.path);
+      if (hasFav) {
+        _localFavorites.remove(track.id);
+        _localFavorites.remove(track.path);
+      } else {
+        _localFavorites.add(track.id);
+        _localFavorites.add(track.path);
+      }
+    });
+    widget.onToggleFavorite(track.id);
   }
 
   List<TrackModel> _getFolderTracks() {
@@ -81,10 +112,9 @@ class _FolderDetailScreenState extends State<FolderDetailScreen> {
 
         return StatefulBuilder(
           builder: (context, setModalState) {
-            final filteredAvailable = availableTracks.where((t) {
-              final q = modalSearch.toLowerCase();
-              return t.title.toLowerCase().contains(q) || t.artist.toLowerCase().contains(q);
-            }).toList();
+            final filteredAvailable = modalSearch.isEmpty
+                ? availableTracks
+                : availableTracks.where((t) => TrackNormalizer.matchesSearch(t, modalSearch)).toList();
 
             return Container(
               height: MediaQuery.of(context).size.height * 0.8,
@@ -347,10 +377,9 @@ class _FolderDetailScreenState extends State<FolderDetailScreen> {
   @override
   Widget build(BuildContext context) {
     final folderTracks = _getFolderTracks();
-    final filteredTracks = folderTracks.where((t) {
-      final q = _searchQuery.toLowerCase();
-      return t.title.toLowerCase().contains(q) || t.artist.toLowerCase().contains(q);
-    }).toList();
+    final filteredTracks = _searchQuery.isEmpty
+        ? folderTracks
+        : folderTracks.where((t) => TrackNormalizer.matchesSearch(t, _searchQuery)).toList();
 
     return Scaffold(
       backgroundColor: AppTheme.background,
@@ -630,17 +659,18 @@ class _FolderDetailScreenState extends State<FolderDetailScreen> {
                         itemBuilder: (context, index) {
                           final track = filteredTracks[index];
                           final isPlaying = widget.currentPlayingPath == track.path;
-                          final isFav = widget.favorites.contains(track.path);
+                          final isFav = _localFavorites.contains(track.id) || _localFavorites.contains(track.path);
                           final originalIndex = folderTracks.indexOf(track);
                           final playIndex = originalIndex != -1 ? originalIndex : index;
 
                           return TrackTile(
+                            key: ValueKey(track.id),
                             track: track,
                             isPlaying: isPlaying,
                             isFavorite: isFav,
                             index: index + 1,
                             onTap: () => widget.onPlayTrack(folderTracks, playIndex),
-                            onToggleFavorite: () => widget.onToggleFavorite(track.path),
+                            onToggleFavorite: () => _handleToggleFavorite(track),
                             onLongPress: () {
                               TrackOptionsSheet.show(
                                 context: context,
@@ -649,7 +679,7 @@ class _FolderDetailScreenState extends State<FolderDetailScreen> {
                                 folders: widget.allFolders,
                                 currentFolderId: widget.folder.id,
                                 onPlayNow: () => widget.onPlayTrack(folderTracks, playIndex),
-                                onToggleFavorite: () => widget.onToggleFavorite(track.path),
+                                onToggleFavorite: () => _handleToggleFavorite(track),
                                 onAddToFolder: (f) => widget.onAddToFolder(f, track),
                                 onCreateAndAddToFolder: (name) => widget.onCreateAndAddToFolder(name, track),
                                 onRemoveFromCurrentFolder: () {

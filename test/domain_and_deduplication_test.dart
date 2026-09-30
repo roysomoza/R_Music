@@ -3,6 +3,7 @@ import 'package:pure_audio/domain/entities/album.dart';
 import 'package:pure_audio/domain/entities/artist.dart';
 import 'package:pure_audio/domain/entities/folder.dart';
 import 'package:pure_audio/domain/entities/track.dart';
+import 'package:pure_audio/models/track_model.dart';
 import 'package:pure_audio/core/utils/track_normalizer.dart';
 
 void main() {
@@ -367,6 +368,55 @@ void main() {
       expect(deduplicated.length, equals(7000));
       // Six sigma threshold: < 500ms for 10k tracks in-memory
       expect(stopwatch.elapsedMilliseconds, lessThan(500));
+    });
+  });
+
+  group('TrackNormalizer - Comprehensive Search Matching (Title & Artist)', () {
+    final track = TrackModel(
+      id: '1',
+      path: '/storage/emulated/0/Download/Pedro Navaja.mp3',
+      title: 'Pedro Navaja',
+      artist: 'Rubén Blades',
+      album: 'Siembra',
+      dateAdded: DateTime.now(),
+    );
+
+    test('Search by artist without accents matches accented artist ("Ruben Blades" -> "Rubén Blades")', () {
+      expect(TrackNormalizer.matchesSearch(track, 'Ruben Blades'), isTrue);
+      expect(TrackNormalizer.matchesSearch(track, 'ruben blades'), isTrue);
+      expect(TrackNormalizer.matchesSearch(track, 'Ruben'), isTrue);
+      expect(TrackNormalizer.matchesSearch(track, 'Blades'), isTrue);
+      expect(TrackNormalizer.matchesSearch(track, 'Rubén Blades'), isTrue);
+    });
+
+    test('Search by track title matches', () {
+      expect(TrackNormalizer.matchesSearch(track, 'Pedro Navaja'), isTrue);
+      expect(TrackNormalizer.matchesSearch(track, 'pedro'), isTrue);
+      expect(TrackNormalizer.matchesSearch(track, 'navaja'), isTrue);
+    });
+
+    test('Search combining artist and title words in any order', () {
+      expect(TrackNormalizer.matchesSearch(track, 'Ruben Pedro'), isTrue);
+      expect(TrackNormalizer.matchesSearch(track, 'Navaja Blades'), isTrue);
+      expect(TrackNormalizer.matchesSearch(track, 'Siembra Ruben'), isTrue);
+    });
+
+    test('Fallback search matches artist name in filename when tags are missing or generic', () {
+      final untaggedTrack = TrackModel(
+        id: '2',
+        path: '/storage/emulated/0/Download/Ruben Blades - Amor y Control.mp3',
+        title: 'Track 01',
+        artist: 'Artista Desconocido',
+        dateAdded: DateTime.now(),
+      );
+
+      expect(TrackNormalizer.matchesSearch(untaggedTrack, 'Ruben Blades'), isTrue);
+      expect(TrackNormalizer.matchesSearch(untaggedTrack, 'Amor y Control'), isTrue);
+    });
+
+    test('Unrelated query returns false', () {
+      expect(TrackNormalizer.matchesSearch(track, 'Michael Jackson'), isFalse);
+      expect(TrackNormalizer.matchesSearch(track, 'Despacito'), isFalse);
     });
   });
 }

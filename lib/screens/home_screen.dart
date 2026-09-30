@@ -309,15 +309,16 @@ class HomeScreen extends StatelessWidget {
                     (context, index) {
                       final track = currentPlaylist[index];
                       final isPlaying = index == currentPlayingIndex;
-                      final isTrackFav = favorites.contains(track.path);
+                      final isTrackFav = favorites.contains(track.id) || favorites.contains(track.path);
 
                       return TrackTile(
+                        key: ValueKey(track.id),
                         track: track,
                         isPlaying: isPlaying,
                         isFavorite: isTrackFav,
                         index: index + 1,
                         onTap: () => onPlayTrack(currentPlaylist, index),
-                        onToggleFavorite: () => onToggleFavorite(track.path),
+                        onToggleFavorite: () => onToggleFavorite(track.id),
                         onLongPress: () {
                           TrackOptionsSheet.show(
                             context: context,
@@ -325,7 +326,7 @@ class HomeScreen extends StatelessWidget {
                             isFavorite: isTrackFav,
                             folders: folders,
                             onPlayNow: () => onPlayTrack(currentPlaylist, index),
-                            onToggleFavorite: () => onToggleFavorite(track.path),
+                            onToggleFavorite: () => onToggleFavorite(track.id),
                             onAddToFolder: (f) => onAddToFolder(f, track),
                             onCreateAndAddToFolder: (name) => onCreateAndAddToFolder(name, track),
                             onDeleteTrack: (deletePhysical) => onDeleteTrack(track, deletePhysical),

@@ -1,7 +1,6 @@
 import 'dart:async';
 import 'dart:io';
 import 'dart:math';
-import 'package:audio_service/audio_service.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -53,7 +52,7 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
   void initState() {
     super.initState();
     _audioRepo = AudioPlayerRepositoryImpl(player: _audioPlayer);
-    _musicRepoImpl = MusicRepositoryImpl();
+    _musicRepoImpl = MusicRepositoryImpl(musicService: _repository);
     _playerStore = PlayerStore(playerRepo: _audioRepo, musicRepo: _musicRepoImpl);
 
     _screenSubscriptions.add(
@@ -66,6 +65,28 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
         } else if (effect is SleepTimerExpiredEffect) {
           _showSnackBar('Temporizador de apagado completado. Reproducción pausada.');
         }
+      }),
+    );
+
+    _screenSubscriptions.add(
+      _repository.onTracksUpdated.listen((updatedTracks) {
+        if (!mounted) return;
+        setState(() {
+          _allTracks = updatedTracks;
+          if (_currentPlaylist.isNotEmpty) {
+            final trackMap = {for (var t in updatedTracks) t.path: t};
+            _currentPlaylist = _currentPlaylist.map((t) => trackMap[t.path] ?? t).toList();
+          }
+        });
+      }),
+    );
+
+    _screenSubscriptions.add(
+      _musicRepoImpl.favoritesStream.listen((updatedFavorites) {
+        if (!mounted) return;
+        setState(() {
+          _favorites = updatedFavorites;
+        });
       }),
     );
 
@@ -94,6 +115,8 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
     }
     _playerStore.dispose();
     _audioRepo.dispose();
+    _musicRepoImpl.dispose();
+    _repository.dispose();
     super.dispose();
   }
 
@@ -106,6 +129,7 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
         await artFile.writeAsBytes(byteData.buffer.asUint8List());
       }
       _defaultArtUri = Uri.file(artFile.path);
+      _audioRepo.defaultArtUri = _defaultArtUri;
     } catch (e) {
       debugPrint("Error preparing default artwork: $e");
     }
@@ -114,49 +138,69 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
   Future<void> _initializeApp() async {
     setState(() => _isLoading = true);
     try {
-      // 0. Request storage and notification permissions for Android 13-16 / HyperOS
-      await PermissionHandlerService.requestStoragePermissions();
-      await PermissionHandlerService.requestNotificationPermission();
+      // 0. Initialize clean architecture repository bridge & load persistent favorites
+      await _musicRepoImpl.initialize();
+      final favs = await _musicRepoImpl.getFavorites();
 
-      // 1. Prepare artwork for system notification
-      await _prepareDefaultArtwork();
+      final results = await Future.wait([
+        _repository.loadCachedTracks(),
+        _repository.loadFolders(),
+      ]);
 
-      // 2. Load favorites
-      _favorites = await _repository.loadFavorites();
+      final cachedTracks = results[0] as List<TrackModel>;
+      final flds = results[1] as List<FolderModel>;
 
-      // 3. Load cached tracks (deduplicates automatically)
-      _allTracks = await _repository.loadCachedTracks();
+      if (mounted) {
+        setState(() {
+          _allTracks = cachedTracks;
+          _favorites = favs;
+          _folders = flds;
+          if (_currentPlaylist.isEmpty && cachedTracks.isNotEmpty) {
+            _currentPlaylist = List.from(cachedTracks);
+          }
+          // INSTANT RENDER: show songs immediately, no waiting for permissions or audio engine
+          _isLoading = false;
+        });
+      }
 
-      // 4. Load folders
-      _folders = await _repository.loadFolders();
+      // 1. Request permissions in background (non-blocking for cached UI)
+      PermissionHandlerService.requestStoragePermissions();
+      PermissionHandlerService.requestNotificationPermission();
 
-      // 5. Load last playback state
+      // 2. Prepare artwork for system notification
+      _prepareDefaultArtwork();
+
+      // 3. Clean architecture repository initialized above with persistent favorites SSOT
+
+      // 4. Restore last playback state in background and synchronize MVI PlayerStore
       final lastPlayback = await _repository.loadPlaybackState();
-      if (lastPlayback != null) {
+      if (lastPlayback != null && mounted) {
         final List<dynamic> paths = lastPlayback['playlist'] as List<dynamic>? ?? [];
         final int index = lastPlayback['currentIndex'] as int? ?? -1;
+
+        final Map<String, TrackModel> trackMap = {
+          for (var t in _allTracks) t.path: t
+        };
 
         final List<TrackModel> restoredPlaylist = [];
         for (var pStr in paths) {
           final path = pStr.toString();
-          final found = _allTracks.firstWhere(
-            (t) => t.path == path,
-            orElse: () => TrackModel(
+          if (trackMap.containsKey(path)) {
+            restoredPlaylist.add(trackMap[path]!);
+          } else {
+            restoredPlaylist.add(TrackModel(
               id: path.hashCode.toString(),
               path: path,
               title: p.basenameWithoutExtension(path),
               artist: 'Artista Desconocido',
               dateAdded: DateTime.now(),
-            ),
-          );
-          if (await File(found.path).exists()) {
-            restoredPlaylist.add(found);
+            ));
           }
         }
 
         final cleanRestored = _repository.deduplicateTracks(restoredPlaylist);
 
-        if (cleanRestored.isNotEmpty) {
+        if (cleanRestored.isNotEmpty && mounted) {
           final safeIndex = (index >= 0 && index < cleanRestored.length) ? index : 0;
           setState(() {
             _currentPlaylist = cleanRestored;
@@ -164,36 +208,34 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
           });
 
           try {
-            final track = cleanRestored[safeIndex];
-            await _audioPlayer.setAudioSource(
-              AudioSource.uri(
-                Uri.file(track.path),
-                tag: MediaItem(
-                  id: track.path,
-                  title: track.title,
-                  artist: track.artist,
-                  album: track.album,
-                  artUri: _defaultArtUri,
-                ),
-              ),
-              preload: false,
-            );
+            final domainQueue = cleanRestored.map((t) => Track(
+              id: t.id,
+              path: t.path,
+              title: t.title,
+              artist: t.artist,
+              album: t.album,
+              duration: t.duration,
+              dateAdded: t.dateAdded,
+              fileSize: t.fileSize,
+              isFavorite: _favorites.contains(t.id) || _favorites.contains(t.path),
+            )).toList();
+
+            await _playerStore.dispatch(RestorePlaybackIntent(
+              queue: domainQueue,
+              initialIndex: safeIndex,
+            ));
           } catch (e) {
-            debugPrint("Error preloading audio on startup: $e");
+            debugPrint("Error restoring playback state to PlayerStore on startup: $e");
           }
         }
       }
 
-      if (_currentPlaylist.isEmpty && _allTracks.isNotEmpty) {
-        _currentPlaylist = List.from(_allTracks);
-      }
-
-      // 6. Background rescan to detect new audio files
+      // 4. Background rescan to detect new audio files
       _rescanLibrary(silent: _allTracks.isNotEmpty);
     } catch (e) {
       debugPrint("Error initializing app state: $e");
     } finally {
-      if (mounted) setState(() => _isLoading = false);
+      if (mounted && _isLoading) setState(() => _isLoading = false);
     }
   }
 
@@ -228,15 +270,8 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
     }
   }
 
-  Future<void> _toggleFavorite(String path) async {
-    setState(() {
-      if (_favorites.contains(path)) {
-        _favorites.remove(path);
-      } else {
-        _favorites.add(path);
-      }
-    });
-    await _repository.saveFavorites(_favorites);
+  Future<void> _toggleFavorite(String trackIdOrPath) async {
+    await _musicRepoImpl.toggleFavorite(trackIdOrPath);
   }
 
   void _playTrack(List<TrackModel> playlist, int index) {
@@ -259,7 +294,7 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
         duration: currentModel.duration,
         dateAdded: currentModel.dateAdded,
         fileSize: currentModel.fileSize,
-        isFavorite: _favorites.contains(currentModel.path),
+        isFavorite: _favorites.contains(currentModel.id) || _favorites.contains(currentModel.path),
       );
       final domainQueue = playlist.map((t) => Track(
         id: t.id,
@@ -270,7 +305,7 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
         duration: t.duration,
         dateAdded: t.dateAdded,
         fileSize: t.fileSize,
-        isFavorite: _favorites.contains(t.path),
+        isFavorite: _favorites.contains(t.id) || _favorites.contains(t.path),
       )).toList();
 
       _playerStore.dispatch(PlayTrackIntent(domainTrack, queue: domainQueue, initialIndex: index));
@@ -437,29 +472,37 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
         deleteFileFromDisk: deletePhysical,
       );
 
-      final updatedFavorites = await _repository.loadFavorites();
+      if (_favorites.contains(track.id) || _favorites.contains(track.path)) {
+        await _musicRepoImpl.toggleFavorite(track.id);
+      }
+      final updatedFavorites = await _musicRepoImpl.getFavorites();
       final updatedFolders = await _repository.loadFolders();
 
-      // Check current playing
-      final isPlayingDeleted = _currentPlayingIndex >= 0 &&
-          _currentPlayingIndex < _currentPlaylist.length &&
-          _currentPlaylist[_currentPlayingIndex].path == track.path;
+      // a) Capture current playing track reference before filtering
+      final currentPlayingTrack = (_currentPlayingIndex >= 0 && _currentPlayingIndex < _currentPlaylist.length)
+          ? _currentPlaylist[_currentPlayingIndex]
+          : null;
 
+      // b) Filter out deleted track
       final updatedPlaylist = _currentPlaylist.where((t) => t.path != track.path).toList();
 
-      if (isPlayingDeleted) {
-        if (updatedPlaylist.isEmpty) {
-          await _audioPlayer.stop();
-          _currentPlayingIndex = -1;
+      // c) Adjust _currentPlayingIndex deterministically based on identity
+      if (currentPlayingTrack != null) {
+        if (currentPlayingTrack.path == track.path) {
+          // The playing track was deleted
+          if (updatedPlaylist.isEmpty) {
+            await _audioPlayer.stop();
+            _currentPlayingIndex = -1;
+          } else {
+            final nextIndex = min(_currentPlayingIndex, updatedPlaylist.length - 1);
+            _playTrack(updatedPlaylist, nextIndex);
+          }
         } else {
-          // Play next available or index 0
-          final nextIndex = min(_currentPlayingIndex, updatedPlaylist.length - 1);
-          _playTrack(updatedPlaylist, nextIndex);
+          // Another track was deleted: recalculate exact index of still-playing track
+          _currentPlayingIndex = updatedPlaylist.indexWhere((t) => t.path == currentPlayingTrack.path);
         }
       } else {
-        if (_currentPlayingIndex >= updatedPlaylist.length) {
-          _currentPlayingIndex = updatedPlaylist.length - 1;
-        }
+        _currentPlayingIndex = -1;
       }
 
       setState(() {
@@ -468,6 +511,9 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
         _folders = updatedFolders;
         _currentPlaylist = updatedPlaylist;
       });
+
+      // d) Persist updated playlist and index
+      await _savePlaybackState();
 
       _showSnackBar(deletePhysical
           ? 'Canción y archivo eliminados correctamente.'
@@ -500,8 +546,8 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
         ? _currentPlaylist[_currentPlayingIndex]
         : null;
 
-    final favoriteTracks = _allTracks.where((t) => _favorites.contains(t.path)).toList();
-    final isFav = currentTrack != null && _favorites.contains(currentTrack.path);
+    final favoriteTracks = _allTracks.where((t) => _favorites.contains(t.id) || _favorites.contains(t.path)).toList();
+    final isFav = currentTrack != null && (_favorites.contains(currentTrack.id) || _favorites.contains(currentTrack.path));
 
     final List<Widget> screens = [
       HomeScreen(
@@ -616,18 +662,23 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
                   ),
                 ),
                 // FIXED / DOCKED PLAYER CONTROLS AT THE BOTTOM
-                if (currentTrack != null)
-                  PlayerDock(
-                    store: _playerStore,
-                    audioPlayer: _audioPlayer,
-                    currentTrack: currentTrack,
-                    isFavorite: isFav,
-                    onNext: _playNext,
-                    onPrevious: _playPrevious,
-                    onToggleFavorite: () => _toggleFavorite(currentTrack.path),
-                    onToggleShuffle: _toggleShuffle,
-                    onExpandPlayer: () => ExpandedPlayerScreen.show(context, _playerStore),
-                  ),
+                PlayerDock(
+                  store: _playerStore,
+                  audioPlayer: _audioPlayer,
+                  currentTrack: currentTrack,
+                  isFavorite: isFav,
+                  onNext: _playNext,
+                  onPrevious: _playPrevious,
+                  onToggleFavorite: () {
+                    final target = _playerStore.state.currentTrack?.id ??
+                        _playerStore.state.currentTrack?.path ??
+                        currentTrack?.id ??
+                        currentTrack?.path;
+                    if (target != null) _toggleFavorite(target);
+                  },
+                  onToggleShuffle: _toggleShuffle,
+                  onExpandPlayer: () => ExpandedPlayerScreen.show(context, _playerStore),
+                ),
               ],
             ),
           ),

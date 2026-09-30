@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:io';
+import 'dart:math';
 import 'package:audio_service/audio_service.dart';
 import 'package:audio_session/audio_session.dart';
 import 'package:flutter/foundation.dart';
@@ -25,10 +26,13 @@ class AudioPlayerRepositoryImpl implements IAudioPlayerRepository {
       StreamController<int>.broadcast();
   final StreamController<RepeatMode> _repeatModeController =
       StreamController<RepeatMode>.broadcast();
+  final StreamController<String> _playbackErrorController =
+      StreamController<String>.broadcast();
 
   List<Track> _queue = [];
   int _currentIndex = -1;
   RepeatMode _repeatMode = RepeatMode.off;
+  int _consecutiveErrorCount = 0;
   final List<StreamSubscription> _subscriptions = [];
 
   // Audio Focus & Interruption management state
@@ -37,6 +41,7 @@ class AudioPlayerRepositoryImpl implements IAudioPlayerRepository {
   bool _playOnResume = false;
   bool _isInterrupted = false;
   Duration _lastKnownPosition = Duration.zero;
+  Uri? defaultArtUri;
 
   AudioPlayerRepositoryImpl({
     AudioPlayer? player,
@@ -92,9 +97,12 @@ class AudioPlayerRepositoryImpl implements IAudioPlayerRepository {
       }),
     );
 
-    // 2. Playback completion listener to handle next or loop
+    // 2. Playback state listener: reset error circuit breaker on successful playback & handle loop
     _subscriptions.add(
       _player.playerStateStream.listen((playerState) {
+        if (playerState.processingState == ProcessingState.ready && playerState.playing) {
+          _consecutiveErrorCount = 0;
+        }
         if (playerState.processingState == ProcessingState.completed) {
           if (_repeatMode == RepeatMode.one) {
             _player.seek(Duration.zero);
@@ -130,17 +138,50 @@ class AudioPlayerRepositoryImpl implements IAudioPlayerRepository {
       }),
     );
 
-    // 5. Playback event error listener to prevent hanging on corrupt or unreadable audio files
+    // 5. Playback event error listener with circuit breaker against infinite skip loops
     _subscriptions.add(
       _player.playbackEventStream.listen(
         (_) {},
-        onError: (Object error, StackTrace stackTrace) {
+        onError: (Object error, StackTrace stackTrace) async {
           debugPrint('Audio playback event error: $error');
-          if (_queue.length > 1) {
-            skipToNext();
-          } else {
-            pause();
+          _consecutiveErrorCount++;
+
+          final idx = _player.currentIndex ?? _currentIndex;
+          final failedTrack = (idx >= 0 && idx < _queue.length) ? _queue[idx] : null;
+          final trackTitle = failedTrack?.title.isNotEmpty == true
+              ? failedTrack!.title
+              : 'canción';
+
+          // If single track queue or no queue, stop immediately and notify
+          if (_queue.length <= 1) {
+            _consecutiveErrorCount = 0;
+            await pause();
+            _playbackErrorController.add(
+              'Error al reproducir "$trackTitle": archivo no encontrado o dañado.',
+            );
+            return;
           }
+
+          // Circuit breaker: halt playback if consecutive errors reach or exceed queue size (capped at 5)
+          // to prevent infinite loops of skipping across corrupt/missing files.
+          final maxAllowedErrors = min(_queue.length, 5);
+          if (_consecutiveErrorCount >= maxAllowedErrors) {
+            debugPrint(
+              'Circuit breaker triggered: $_consecutiveErrorCount consecutive playback errors. Halting playback.',
+            );
+            _consecutiveErrorCount = 0;
+            await pause();
+            _playbackErrorController.add(
+              'No se pudieron reproducir las canciones seleccionadas. Archivos no encontrados o dañados.',
+            );
+            return;
+          }
+
+          _playbackErrorController.add(
+            'Error al reproducir "$trackTitle": archivo no encontrado o dañado.',
+          );
+
+          await skipToNext();
         },
       ),
     );
@@ -233,13 +274,18 @@ class AudioPlayerRepositoryImpl implements IAudioPlayerRepository {
   Stream<int> get currentIndexStream => _currentIndexController.stream;
 
   @override
+  Stream<String> get playbackErrorStream => _playbackErrorController.stream;
+
+  @override
   Future<void> setQueue(
     List<Track> queue, {
     int initialIndex = 0,
     bool autoPlay = true,
+    bool preload = true,
   }) async {
     if (queue.isEmpty) return;
 
+    _consecutiveErrorCount = 0;
     _queue = List.from(queue);
     _currentIndex = initialIndex.clamp(0, _queue.length - 1);
 
@@ -252,6 +298,7 @@ class AudioPlayerRepositoryImpl implements IAudioPlayerRepository {
       if (track.artworkPath != null && File(track.artworkPath!).existsSync()) {
         artUri = Uri.file(track.artworkPath!);
       }
+      artUri ??= defaultArtUri;
 
       return AudioSource.uri(
         Uri.file(track.path),
@@ -271,6 +318,7 @@ class AudioPlayerRepositoryImpl implements IAudioPlayerRepository {
         audioSources,
         initialIndex: _currentIndex,
         initialPosition: Duration.zero,
+        preload: preload,
       );
 
       if (autoPlay) {
@@ -281,6 +329,12 @@ class AudioPlayerRepositoryImpl implements IAudioPlayerRepository {
       // Fallback: set single track
       try {
         final track = _queue[_currentIndex];
+        Uri? artUri;
+        if (track.artworkPath != null && File(track.artworkPath!).existsSync()) {
+          artUri = Uri.file(track.artworkPath!);
+        }
+        artUri ??= defaultArtUri;
+
         await _player.setAudioSource(
           AudioSource.uri(
             Uri.file(track.path),
@@ -289,8 +343,11 @@ class AudioPlayerRepositoryImpl implements IAudioPlayerRepository {
               title: track.title,
               artist: track.artist,
               album: track.album,
+              duration: track.duration > Duration.zero ? track.duration : null,
+              artUri: artUri,
             ),
           ),
+          preload: preload,
         );
         if (autoPlay) await play();
       } catch (fallbackErr) {
@@ -302,6 +359,7 @@ class AudioPlayerRepositoryImpl implements IAudioPlayerRepository {
   @override
   Future<void> play() async {
     _playOnResume = false;
+    _consecutiveErrorCount = 0;
     try {
       if (Platform.isAndroid) {
         await PermissionHandlerService.requestNotificationPermission();
@@ -450,6 +508,7 @@ class AudioPlayerRepositoryImpl implements IAudioPlayerRepository {
     await _queueController.close();
     await _currentIndexController.close();
     await _repeatModeController.close();
+    await _playbackErrorController.close();
     if (_audioSession != null) {
       try {
         await _audioSession!.setActive(false);
@@ -475,6 +534,9 @@ class AudioPlayerRepositoryImpl implements IAudioPlayerRepository {
 
   @visibleForTesting
   double get userVolume => _userVolume;
+
+  @visibleForTesting
+  int get consecutiveErrorCount => _consecutiveErrorCount;
 
   @visibleForTesting
   Future<void> handleInterruptionEvent(AudioInterruptionEvent event) =>

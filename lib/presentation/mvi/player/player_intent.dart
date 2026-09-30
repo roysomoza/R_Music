@@ -26,6 +26,20 @@ class PlayQueueIntent extends PlayerIntent {
   const PlayQueueIntent(this.queue, {this.initialIndex = 0});
 }
 
+/// Dispatched on app startup to restore the previously persisted playback state
+/// (queue, active track index, position) in a paused state without auto-playing.
+class RestorePlaybackIntent extends PlayerIntent {
+  final List<Track> queue;
+  final int initialIndex;
+  final Duration? position;
+
+  const RestorePlaybackIntent({
+    required this.queue,
+    this.initialIndex = 0,
+    this.position,
+  });
+}
+
 /// Toggles between Play and Pause.
 class PlayPauseIntent extends PlayerIntent {
   const PlayPauseIntent();

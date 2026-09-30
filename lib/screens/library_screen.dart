@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import '../core/utils/track_normalizer.dart';
 import '../models/folder_model.dart';
 import '../models/track_model.dart';
 import '../theme/app_theme.dart';
@@ -291,20 +292,20 @@ class _LibraryScreenState extends State<LibraryScreen> with SingleTickerProvider
       allTracks.sort((a, b) => b.dateAdded.compareTo(a.dateAdded));
     }
 
-    // Filter tracks by search query
+    // Filter tracks by search query across title, artist, album, and filename
     final List<TrackModel> filteredTracks = _searchQuery.isEmpty
         ? allTracks
-        : allTracks.where((t) {
-            final q = _searchQuery.toLowerCase();
-            return t.title.toLowerCase().contains(q) || t.artist.toLowerCase().contains(q);
-          }).toList();
+        : allTracks.where((t) => TrackNormalizer.matchesSearch(t, _searchQuery)).toList();
 
     final dateGroups = _groupTracksByDate(filteredTracks);
 
-    // Filter folders by search query
+    // Filter folders by search query (accent-insensitive, multi-token)
     final filteredFolders = widget.folders.where((f) {
-      final q = _searchQuery.toLowerCase();
-      return f.name.toLowerCase().contains(q);
+      if (_searchQuery.trim().isEmpty) return true;
+      final q = TrackNormalizer.removeDiacritics(_searchQuery).toLowerCase();
+      final tokens = q.split(RegExp(r'[\s,\-_/]+')).where((t) => t.isNotEmpty);
+      final target = TrackNormalizer.removeDiacritics(f.name).toLowerCase();
+      return tokens.every((token) => target.contains(token));
     }).toList();
 
     return Scaffold(
@@ -651,9 +652,10 @@ class _LibraryScreenState extends State<LibraryScreen> with SingleTickerProvider
               final trackIndex = index - runningCount;
               final track = entry.value[trackIndex];
               final isPlaying = widget.currentPlayingPath == track.path;
-              final isFav = widget.favorites.contains(track.path);
+              final isFav = widget.favorites.contains(track.id) || widget.favorites.contains(track.path);
 
               return TrackTile(
+                key: ValueKey(track.id),
                 track: track,
                 isPlaying: isPlaying,
                 isFavorite: isFav,
@@ -663,7 +665,7 @@ class _LibraryScreenState extends State<LibraryScreen> with SingleTickerProvider
                   final playIndex = originalIndex != -1 ? originalIndex : 0;
                   widget.onPlayTrack(allTracks, playIndex);
                 },
-                onToggleFavorite: () => widget.onToggleFavorite(track.path),
+                onToggleFavorite: () => widget.onToggleFavorite(track.id),
                 onLongPress: () {
                   final originalIndex = allTracks.indexOf(track);
                   final playIndex = originalIndex != -1 ? originalIndex : 0;
@@ -673,7 +675,7 @@ class _LibraryScreenState extends State<LibraryScreen> with SingleTickerProvider
                     isFavorite: isFav,
                     folders: widget.folders,
                     onPlayNow: () => widget.onPlayTrack(allTracks, playIndex),
-                    onToggleFavorite: () => widget.onToggleFavorite(track.path),
+                    onToggleFavorite: () => widget.onToggleFavorite(track.id),
                     onAddToFolder: (f) => widget.onAddToFolder(f, track),
                     onCreateAndAddToFolder: (name) => widget.onCreateAndAddToFolder(name, track),
                     onDeleteTrack: (deletePhysical) => widget.onDeleteTrack(track, deletePhysical),
@@ -687,17 +689,18 @@ class _LibraryScreenState extends State<LibraryScreen> with SingleTickerProvider
         } else {
           final track = filteredTracks[index];
           final isPlaying = widget.currentPlayingPath == track.path;
-          final isFav = widget.favorites.contains(track.path);
+          final isFav = widget.favorites.contains(track.id) || widget.favorites.contains(track.path);
           final originalIndex = allTracks.indexOf(track);
           final playIndex = originalIndex != -1 ? originalIndex : index;
 
           return TrackTile(
+            key: ValueKey(track.id),
             track: track,
             isPlaying: isPlaying,
             isFavorite: isFav,
             dateBadge: _formatDateBadge(track.dateAdded),
             onTap: () => widget.onPlayTrack(allTracks, playIndex),
-            onToggleFavorite: () => widget.onToggleFavorite(track.path),
+            onToggleFavorite: () => widget.onToggleFavorite(track.id),
             onLongPress: () {
               TrackOptionsSheet.show(
                 context: context,
@@ -705,7 +708,7 @@ class _LibraryScreenState extends State<LibraryScreen> with SingleTickerProvider
                 isFavorite: isFav,
                 folders: widget.folders,
                 onPlayNow: () => widget.onPlayTrack(allTracks, playIndex),
-                onToggleFavorite: () => widget.onToggleFavorite(track.path),
+                onToggleFavorite: () => widget.onToggleFavorite(track.id),
                 onAddToFolder: (f) => widget.onAddToFolder(f, track),
                 onCreateAndAddToFolder: (name) => widget.onCreateAndAddToFolder(name, track),
                 onDeleteTrack: (deletePhysical) => widget.onDeleteTrack(track, deletePhysical),
