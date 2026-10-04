@@ -144,6 +144,9 @@ class AudioPlayerRepositoryImpl implements IAudioPlayerRepository {
         (_) {},
         onError: (Object error, StackTrace stackTrace) async {
           debugPrint('Audio playback event error: $error');
+          if (error.toString().contains('Loading interrupted')) {
+            return;
+          }
           _consecutiveErrorCount++;
 
           final idx = _player.currentIndex ?? _currentIndex;
@@ -326,6 +329,9 @@ class AudioPlayerRepositoryImpl implements IAudioPlayerRepository {
       }
     } catch (e) {
       debugPrint('Error setting concatenating audio source: $e');
+      if (e.toString().contains('Loading interrupted')) {
+        return;
+      }
       // Fallback: set single track
       try {
         final track = _queue[_currentIndex];
@@ -352,6 +358,9 @@ class AudioPlayerRepositoryImpl implements IAudioPlayerRepository {
         if (autoPlay) await play();
       } catch (fallbackErr) {
         debugPrint('Fallback audio playback error: $fallbackErr');
+        if (fallbackErr.toString().contains('Loading interrupted')) {
+          return;
+        }
       }
     }
   }

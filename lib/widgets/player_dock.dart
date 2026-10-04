@@ -1,8 +1,9 @@
 import 'dart:io';
-import 'package:flutter/material.dart';
+import 'package:flutter/material.dart' hide RepeatMode;
 import 'package:just_audio/just_audio.dart';
 import '../core/theme/app_theme.dart';
 import '../domain/entities/track.dart';
+import '../domain/repositories/i_audio_player_repository.dart';
 import '../models/track_model.dart';
 import '../presentation/mvi/player/player_intent.dart';
 import '../presentation/mvi/player/player_state.dart' as mvi;
@@ -22,6 +23,7 @@ class PlayerDock extends StatelessWidget {
   final VoidCallback? onPrevious;
   final VoidCallback? onToggleFavorite;
   final VoidCallback? onToggleShuffle;
+  final VoidCallback? onToggleRepeat;
   final VoidCallback? onExpandPlayer;
 
   const PlayerDock({
@@ -34,6 +36,7 @@ class PlayerDock extends StatelessWidget {
     this.onPrevious,
     this.onToggleFavorite,
     this.onToggleShuffle,
+    this.onToggleRepeat,
     this.onExpandPlayer,
   });
 
@@ -77,6 +80,7 @@ class PlayerDock extends StatelessWidget {
             isPlaying: state.isPlaying,
             isBuffering: state.isBuffering,
             isShuffle: state.isShuffle,
+            repeatMode: state.repeatMode,
             isFav: track.isFavorite,
             isSleepTimerActive: state.isSleepTimerActive,
             onSeek: (pos) => store!.dispatch(SeekIntent(pos)),
@@ -84,6 +88,7 @@ class PlayerDock extends StatelessWidget {
             onNext: () => store!.dispatch(const SkipToNextIntent()),
             onPrevious: () => store!.dispatch(const SkipToPreviousIntent()),
             onToggleShuffle: () => store!.dispatch(const ToggleShuffleIntent()),
+            onToggleRepeat: () => store!.dispatch(const CycleRepeatModeIntent()),
             onToggleFavorite: () => store!.dispatch(const ToggleFavoriteCurrentIntent()),
             onOpenSleepTimer: () => SleepTimerDialog.show(context, store!),
             onOpenEqualizer: () => EqualizerBottomSheet.show(context),
@@ -124,6 +129,7 @@ class PlayerDock extends StatelessWidget {
                   isPlaying: isPlaying,
                   isBuffering: isBuffering,
                   isShuffle: audioPlayer!.shuffleModeEnabled,
+                  repeatMode: RepeatMode.off,
                   isFav: isFavorite,
                   isSleepTimerActive: false,
                   onSeek: (p) => audioPlayer!.seek(p),
@@ -131,6 +137,7 @@ class PlayerDock extends StatelessWidget {
                   onNext: onNext ?? () {},
                   onPrevious: onPrevious ?? () {},
                   onToggleShuffle: onToggleShuffle ?? () {},
+                  onToggleRepeat: onToggleRepeat ?? () {},
                   onToggleFavorite: onToggleFavorite ?? () {},
                   onOpenSleepTimer: null,
                   onOpenEqualizer: () => EqualizerBottomSheet.show(context),
@@ -154,6 +161,7 @@ class PlayerDock extends StatelessWidget {
     required bool isPlaying,
     required bool isBuffering,
     required bool isShuffle,
+    required RepeatMode repeatMode,
     required bool isFav,
     required bool isSleepTimerActive,
     required ValueChanged<Duration> onSeek,
@@ -161,6 +169,7 @@ class PlayerDock extends StatelessWidget {
     required VoidCallback onNext,
     required VoidCallback onPrevious,
     required VoidCallback onToggleShuffle,
+    required VoidCallback onToggleRepeat,
     required VoidCallback onToggleFavorite,
     required VoidCallback? onOpenSleepTimer,
     required VoidCallback onOpenEqualizer,
@@ -285,6 +294,7 @@ class PlayerDock extends StatelessWidget {
                 children: [
                   // Album Art Thumbnail (with embedded ID3 cache support)
                   GestureDetector(
+                    behavior: HitTestBehavior.opaque,
                     onTap: onExpand,
                     child: Container(
                       width: 50,
@@ -322,6 +332,7 @@ class PlayerDock extends StatelessWidget {
                   // Title & Artist
                   Expanded(
                     child: GestureDetector(
+                      behavior: HitTestBehavior.opaque,
                       onTap: onExpand,
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
@@ -360,7 +371,10 @@ class PlayerDock extends StatelessWidget {
                     children: [
                       // Shuffle
                       IconButton(
-                        iconSize: 20,
+                        visualDensity: VisualDensity.compact,
+                        padding: EdgeInsets.zero,
+                        constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
+                        iconSize: 18,
                         icon: Icon(
                           Icons.shuffle_rounded,
                           color: isShuffle ? AppTheme.accentNeonBlue : AppTheme.textMuted,
@@ -370,7 +384,10 @@ class PlayerDock extends StatelessWidget {
 
                       // Previous
                       IconButton(
-                        iconSize: 28,
+                        visualDensity: VisualDensity.compact,
+                        padding: EdgeInsets.zero,
+                        constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
+                        iconSize: 22,
                         icon: const Icon(Icons.skip_previous_rounded),
                         color: AppTheme.textPrimary,
                         onPressed: onPrevious,
@@ -378,8 +395,8 @@ class PlayerDock extends StatelessWidget {
 
                       // Play/Pause
                       Container(
-                        width: 46,
-                        height: 46,
+                        width: 40,
+                        height: 40,
                         decoration: BoxDecoration(
                           shape: BoxShape.circle,
                           gradient: AppTheme.neonBlueGradient,
@@ -394,16 +411,17 @@ class PlayerDock extends StatelessWidget {
                         child: isBuffering
                             ? const Center(
                                 child: SizedBox(
-                                  width: 22,
-                                  height: 22,
+                                  width: 20,
+                                  height: 20,
                                   child: CircularProgressIndicator(
-                                    strokeWidth: 2.5,
+                                    strokeWidth: 2.2,
                                     color: Colors.white,
                                   ),
                                 ),
                               )
                             : IconButton(
-                                iconSize: isPlaying ? 26 : 28,
+                                padding: EdgeInsets.zero,
+                                iconSize: 24,
                                 icon: Icon(
                                   isPlaying ? Icons.pause_rounded : Icons.play_arrow_rounded,
                                   color: Colors.white,
@@ -414,15 +432,38 @@ class PlayerDock extends StatelessWidget {
 
                       // Next
                       IconButton(
-                        iconSize: 28,
+                        visualDensity: VisualDensity.compact,
+                        padding: EdgeInsets.zero,
+                        constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
+                        iconSize: 22,
                         icon: const Icon(Icons.skip_next_rounded),
                         color: AppTheme.textPrimary,
                         onPressed: onNext,
                       ),
 
+                      // Botón de Repetición (Nuevo, ubicado entre Next y Favorite)
+                      IconButton(
+                        visualDensity: VisualDensity.compact,
+                        padding: EdgeInsets.zero,
+                        constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
+                        iconSize: 18,
+                        icon: Icon(
+                          repeatMode == RepeatMode.one
+                              ? Icons.repeat_one_rounded
+                              : Icons.repeat_rounded,
+                          color: repeatMode != RepeatMode.off
+                              ? AppTheme.accentNeonBlue
+                              : AppTheme.textMuted,
+                        ),
+                        onPressed: onToggleRepeat,
+                      ),
+
                       // Favorite
                       IconButton(
-                        iconSize: 22,
+                        visualDensity: VisualDensity.compact,
+                        padding: EdgeInsets.zero,
+                        constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
+                        iconSize: 19,
                         icon: Icon(
                           isFav ? Icons.favorite_rounded : Icons.favorite_border_rounded,
                           color: isFav ? AppTheme.favoriteRed : AppTheme.textMuted,

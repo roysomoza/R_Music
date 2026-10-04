@@ -420,6 +420,44 @@ void main() {
       expect(find.byIcon(Icons.favorite_border_rounded), findsNothing);
     });
 
+    testWidgets('PlayerDock repeat button cycles RepeatMode and updates icon', (tester) async {
+      await store.dispatch(RestorePlaybackIntent(queue: [testTrack], initialIndex: 0));
+
+      await tester.pumpWidget(MaterialApp(
+        home: Scaffold(
+          body: PlayerDock(store: store),
+        ),
+      ));
+      await tester.pump();
+
+      // Initially repeat off: Icons.repeat_rounded
+      expect(find.byIcon(Icons.repeat_rounded), findsOneWidget);
+      expect(find.byIcon(Icons.repeat_one_rounded), findsNothing);
+
+      // Tap repeat button -> cycles to RepeatMode.all
+      await tester.tap(find.byIcon(Icons.repeat_rounded));
+      await tester.pumpAndSettle();
+
+      expect(store.state.repeatMode, equals(RepeatMode.all));
+      expect(find.byIcon(Icons.repeat_rounded), findsOneWidget);
+      expect(find.byIcon(Icons.repeat_one_rounded), findsNothing);
+
+      // Tap repeat button again -> cycles to RepeatMode.one
+      await tester.tap(find.byIcon(Icons.repeat_rounded));
+      await tester.pumpAndSettle();
+
+      expect(store.state.repeatMode, equals(RepeatMode.one));
+      expect(find.byIcon(Icons.repeat_one_rounded), findsOneWidget);
+
+      // Tap repeat button again -> cycles back to RepeatMode.off
+      await tester.tap(find.byIcon(Icons.repeat_one_rounded));
+      await tester.pumpAndSettle();
+
+      expect(store.state.repeatMode, equals(RepeatMode.off));
+      expect(find.byIcon(Icons.repeat_rounded), findsOneWidget);
+      expect(find.byIcon(Icons.repeat_one_rounded), findsNothing);
+    });
+
     test('Playback error events from repository emit ShowErrorEffect on store effectStream', () async {
       PlayerEffect? receivedEffect;
       final sub = store.effectStream.listen((effect) {
@@ -434,6 +472,35 @@ void main() {
           equals('Error al reproducir "Cancion": archivo no encontrado o dañado.'));
 
       await sub.cancel();
+    });
+
+    testWidgets('PlayerDock tapping artwork or track info triggers onExpandPlayer', (tester) async {
+      await store.dispatch(RestorePlaybackIntent(queue: [testTrack], initialIndex: 0));
+
+      bool expandedTriggered = false;
+
+      await tester.pumpWidget(MaterialApp(
+        home: Scaffold(
+          body: PlayerDock(
+            store: store,
+            onExpandPlayer: () {
+              expandedTriggered = true;
+            },
+          ),
+        ),
+      ));
+      await tester.pump();
+
+      // Tap title
+      await tester.tap(find.text(testTrack.title));
+      await tester.pump();
+      expect(expandedTriggered, isTrue);
+
+      // Reset and tap artist
+      expandedTriggered = false;
+      await tester.tap(find.text(testTrack.artist));
+      await tester.pump();
+      expect(expandedTriggered, isTrue);
     });
   });
 }

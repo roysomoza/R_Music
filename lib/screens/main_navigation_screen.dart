@@ -46,6 +46,7 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
   Set<String> _favorites = {};
   bool _isLoading = false;
   Uri? _defaultArtUri;
+  DateTime _lastPlayAttempt = DateTime.now();
   final List<StreamSubscription> _screenSubscriptions = [];
 
   @override
@@ -61,7 +62,9 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
         if (effect is ShowToastEffect) {
           _showSnackBar(effect.message);
         } else if (effect is ShowErrorEffect) {
-          _showSnackBar(effect.message);
+          if (!effect.message.contains('Loading interrupted')) {
+            _showSnackBar(effect.message);
+          }
         } else if (effect is SleepTimerExpiredEffect) {
           _showSnackBar('Temporizador de apagado completado. Reproducción pausada.');
         }
@@ -277,6 +280,12 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
   void _playTrack(List<TrackModel> playlist, int index) {
     if (playlist.isEmpty || index < 0 || index >= playlist.length) return;
 
+    final now = DateTime.now();
+    if (index == _currentPlayingIndex && now.difference(_lastPlayAttempt).inMilliseconds < 300) {
+      return;
+    }
+    _lastPlayAttempt = now;
+
     try {
       setState(() {
         _currentPlaylist = playlist;
@@ -311,8 +320,10 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
       _playerStore.dispatch(PlayTrackIntent(domainTrack, queue: domainQueue, initialIndex: index));
       _savePlaybackState();
     } catch (e) {
-      _showSnackBar('Error al reproducir el archivo: $e');
       debugPrint("Playback error: $e");
+      if (!e.toString().contains('Loading interrupted')) {
+        _showSnackBar('Error al reproducir el archivo: $e');
+      }
     }
   }
 
@@ -524,20 +535,25 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
   }
 
   void _showSnackBar(String message) {
-    if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(message, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w600)),
-          backgroundColor: AppTheme.surfaceElevated,
-          behavior: SnackBarBehavior.floating,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(10),
-            side: const BorderSide(color: AppTheme.borderSubtle),
-          ),
-          duration: const Duration(seconds: 3),
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).hideCurrentSnackBar();
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          message,
+          style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w600),
         ),
-      );
-    }
+        backgroundColor: AppTheme.surfaceElevated,
+        behavior: SnackBarBehavior.floating,
+        margin: const EdgeInsets.only(bottom: 84.0, left: 16.0, right: 16.0),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(10),
+          side: const BorderSide(color: AppTheme.borderSubtle),
+        ),
+        duration: const Duration(seconds: 2),
+        dismissDirection: DismissDirection.horizontal,
+      ),
+    );
   }
 
   @override
@@ -677,6 +693,7 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
                     if (target != null) _toggleFavorite(target);
                   },
                   onToggleShuffle: _toggleShuffle,
+                  onToggleRepeat: () => _playerStore.dispatch(const CycleRepeatModeIntent()),
                   onExpandPlayer: () => ExpandedPlayerScreen.show(context, _playerStore),
                 ),
               ],
